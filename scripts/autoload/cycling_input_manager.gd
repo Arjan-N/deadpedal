@@ -13,7 +13,11 @@ const SETTINGS_PATH := "user://rider_settings.cfg"
 ## in-game speed for the same *relative* effort.
 @export var full_effort_ftp_ratio: float = 1.6
 
+enum InputMode { KEYBOARD, TRAINER }
+
 var rider_name: String = "Rider"
+## Which input to use; saved with the rider settings.
+var input_mode: InputMode = InputMode.KEYBOARD
 var rider_ftp_watts: float = 200.0:
 	set(value):
 		rider_ftp_watts = clampf(value, 50.0, 600.0)
@@ -24,13 +28,26 @@ var source: CyclingInputSource
 
 func _ready() -> void:
 	_load_settings()
-	set_source(SimulatedCyclingInput.new())
+	set_input_mode(input_mode)
+
+
+## Switches between the keyboard simulation and a real smart trainer
+## (via the trainer bridge, see tools/trainer_bridge).
+func set_input_mode(mode: InputMode) -> void:
+	input_mode = mode
+	if mode == InputMode.TRAINER:
+		set_source(TrainerBridgeInput.new())
+	else:
+		set_source(SimulatedCyclingInput.new())
 
 
 ## Replaces the active input source (e.g. simulated -> smart trainer).
 func set_source(new_source: CyclingInputSource) -> void:
 	if source:
-		source.queue_free()
+		# Free immediately (not queue_free) so a trainer source releases its
+		# network port before a new one tries to open it.
+		remove_child(source)
+		source.free()
 	source = new_source
 	source.name = "ActiveSource"
 	add_child(source)
@@ -75,6 +92,7 @@ func save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("rider", "name", rider_name)
 	cfg.set_value("rider", "ftp_watts", rider_ftp_watts)
+	cfg.set_value("rider", "input_mode", input_mode)
 	cfg.save(SETTINGS_PATH)
 
 
@@ -83,6 +101,7 @@ func _load_settings() -> void:
 	if cfg.load(SETTINGS_PATH) == OK:
 		rider_name = str(cfg.get_value("rider", "name", rider_name))
 		rider_ftp_watts = float(cfg.get_value("rider", "ftp_watts", rider_ftp_watts))
+		input_mode = int(cfg.get_value("rider", "input_mode", input_mode)) as InputMode
 
 
 func _apply_ftp() -> void:

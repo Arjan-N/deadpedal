@@ -339,8 +339,13 @@ func _process(delta: float) -> void:
 	_next_objective.text = "%s  %d m" % [next[0], roundi(next[1])] if mission.is_riding_stage() else ""
 	var waiting_to_ride := mission.stage in [MissionManager.Stage.COUNTDOWN, MissionManager.Stage.DEPARTURE, MissionManager.Stage.PURSUIT]
 	if waiting_to_ride and me.power_watts < 1.0:
-		var hint := "  (keyboard: press 3)" if CyclingInputManager.get_source_type() == CyclingInputSource.SourceType.SIMULATED else ""
+		var hint := "  (keyboard: press 3)" if CyclingInputManager.source is SimulatedCyclingInput else ""
 		_next_objective.text = "START PEDALLING!" + hint
+	if not CyclingInputManager.is_input_valid() and mission.stage != MissionManager.Stage.SUCCESS and mission.stage != MissionManager.Stage.FAILED:
+		_next_objective.text = "TRAINER SIGNAL LOST - check the trainer bridge window"
+		_next_objective.label_settings.font_color = COL_DANGER if int(_time * 3.0) % 2 == 0 else COL_WARN
+	else:
+		_next_objective.label_settings.font_color = COL_WARN
 	_route_bar.total = mission.extraction_distance
 	_route_bar.gate_at = mission.gate_distance
 	_route_bar.gate_open = mission.gate.is_open

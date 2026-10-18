@@ -9,6 +9,8 @@ var _name_edit: LineEdit
 var _ftp_spin: SpinBox
 var _ip_edit: LineEdit
 var _port_spin: SpinBox
+var _input_option: OptionButton
+var _input_status: Label
 var _main_box: VBoxContainer
 var _lobby_box: VBoxContainer
 var _lobby_status: Label
@@ -129,6 +131,16 @@ func _build() -> void:
 	_ftp_spin.value = CyclingInputManager.rider_ftp_watts
 	_ftp_spin.custom_minimum_size = Vector2(200, 50)
 	right.add_child(_ftp_spin)
+	_label(right, "Cycling input", 22, COL_DIM)
+	_input_option = OptionButton.new()
+	_input_option.add_item("Keyboard (simulated - development)", CyclingInputManager.InputMode.KEYBOARD)
+	_input_option.add_item("Smart trainer (Bluetooth via trainer bridge)", CyclingInputManager.InputMode.TRAINER)
+	_input_option.select(_input_option.get_item_index(CyclingInputManager.input_mode))
+	_input_option.custom_minimum_size = Vector2(360, 50)
+	_input_option.add_theme_font_size_override("font_size", 20)
+	_input_option.item_selected.connect(_on_input_selected)
+	right.add_child(_input_option)
+	_input_status = _label(right, "", 20, COL_DIM)
 	_label(right, "Port", 22, COL_DIM)
 	_port_spin = SpinBox.new()
 	_port_spin.min_value = 1024
@@ -148,6 +160,27 @@ func _build() -> void:
 		"  1-5   steady effort (recovery ... all-out)    0   stop pedalling\n" +
 		"  W / Up   hold to push harder    Space   sprint    S / Down   stop", 20, COL_DIM)
 	help.autowrap_mode = TextServer.AUTOWRAP_OFF
+
+
+func _process(_delta: float) -> void:
+	# Live input status, so you can check the trainer works before riding.
+	var src := CyclingInputManager.source
+	if src is TrainerBridgeInput:
+		if CyclingInputManager.is_input_valid():
+			_input_status.text = "%s:  %d W   %d rpm" % [CyclingInputManager.get_source_name(),
+				roundi(CyclingInputManager.get_power_watts()), maxi(roundi(CyclingInputManager.get_cadence_rpm()), 0)]
+			_input_status.label_settings.font_color = Color(0.45, 1.0, 0.5)
+		else:
+			_input_status.text = "No trainer data. Run tools/trainer_bridge/start_bridge.bat\nand pedal to wake the trainer."
+			_input_status.label_settings.font_color = Color(1.0, 0.6, 0.3)
+	else:
+		_input_status.text = "Keys: 1-5 effort, W push, Space sprint (see below)"
+		_input_status.label_settings.font_color = COL_DIM
+
+
+func _on_input_selected(index: int) -> void:
+	CyclingInputManager.set_input_mode(_input_option.get_item_id(index) as CyclingInputManager.InputMode)
+	CyclingInputManager.save_settings()
 
 
 func _save_profile() -> void:

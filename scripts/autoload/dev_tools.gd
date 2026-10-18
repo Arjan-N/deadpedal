@@ -13,6 +13,7 @@ extends Node
 ##   --join=IP              join a game at IP
 ##   --port=N               network port (default 7777)
 ##   --name=NAME            rider name      --ftp=W   rider FTP
+##   --input=trainer        use the smart-trainer bridge input (keyboard = default)
 ##   --autopilot=W          replace keyboard input with a constant W watts
 ##   --autopilot-profile=T:W,T:W,...   watts changing at times T (seconds)
 ##   --autopilot-react=W    with --autopilot: ride at W watts while the horde
@@ -53,6 +54,8 @@ func _ready() -> void:
 		CyclingInputManager.rider_name = options["name"]
 	if options.has("ftp"):
 		CyclingInputManager.rider_ftp_watts = float(options["ftp"])
+	if options.get("input", "") == "trainer":
+		CyclingInputManager.set_input_mode(CyclingInputManager.InputMode.TRAINER)
 	if options.has("autopilot") or options.has("autopilot-profile"):
 		var src := ScriptedCyclingInput.new()
 		src.constant_watts = float(options.get("autopilot", "200"))

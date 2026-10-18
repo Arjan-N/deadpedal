@@ -109,7 +109,9 @@ func test_input_manager_effort_is_ftp_relative() -> void:
 	check(is_equal_approx(effort_weak, effort_strong), "same %%FTP gives same effort for different riders (%.2f)" % effort_weak)
 	check(CyclingInputManager.get_source_type() == CyclingInputSource.SourceType.SCRIPTED, "source can be swapped")
 	# Restore.
-	CyclingInputManager.source.queue_free()
+	var swapped := CyclingInputManager.source
+	CyclingInputManager.remove_child(swapped)
+	swapped.free()
 	CyclingInputManager.source = original_source
 	CyclingInputManager.rider_ftp_watts = original_ftp
 
