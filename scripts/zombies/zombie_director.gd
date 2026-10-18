@@ -7,6 +7,13 @@ extends Node3D
 ## everyone; each machine then positions the individual zombie models around
 ## that point. The danger is measured against the REARMOST rider, so the group
 ## is only as safe as its slowest member - stick together!
+##
+## Pursuit is gap-based rather than speed-based: the horde drifts towards a
+## "target gap" that depends on how fast the rearmost rider is going, and the
+## speed at which it can close in is capped. So the danger meter tracks your
+## effort smoothly, the horde never vanishes into the distance, and slowing
+## down gives a few seconds of rising warning instead of instant death.
+## Reaching the rider starts a short "grab" you can still sprint out of.
 
 enum Phase { DORMANT, PURSUIT, GATE, FINAL_ESCAPE, STOPPED, OVERRUN }
 
@@ -18,26 +25,39 @@ const ZOMBIE_SCENE := preload("res://scenes/zombies/zombie.tscn")
 @export var wanderer_spacing: Vector2 = Vector2(16.0, 34.0)
 
 @export_group("Pursuit")
-## Base horde speed (m/s) while chasing. Easy riding roughly matches it.
-@export var pursuit_speed: float = 8.0
-## Horde speed after the gate opens - the final escape is harder.
-@export var final_escape_speed: float = 9.2
-## Gap (m) behind the rearmost rider where the horde first appears.
-@export var start_gap: float = 55.0
-## Beyond this gap the horde speeds up, so riders can't escape completely.
-## Together with catch_up_rate this sets how close the horde hangs:
-## steady gap = comfortable_gap + (rider speed - horde speed) / catch_up_rate.
-@export var comfortable_gap: float = 35.0
-## Extra m/s per metre of gap beyond comfortable_gap.
-@export var catch_up_rate: float = 0.2
-## The horde is never further behind than this.
-@export var max_gap: float = 70.0
+## The horde's pace (m/s) before the gate. Riding at exactly this speed keeps
+## the horde at base_gap. (9.5 m/s = 34 km/h)
+@export var pursuit_pace: float = 9.5
+## The horde's pace after the gate opens - the final escape is harder.
+@export var final_escape_pace: float = 10.2
+## Gap (m) the horde settles at when you ride at its pace.
+## Settled gap = base_gap + (your speed - pace) * gap_per_mps, within 0..max_gap.
+@export var base_gap: float = 22.0
+## How many metres of gap each m/s above (or below) the pace is worth.
+@export var gap_per_mps: float = 6.0
+## The horde never falls further behind than this, so it stays in view.
+@export var max_gap: float = 45.0
+## Gap (m) where the horde first appears.
+@export var start_gap: float = 45.0
+## How quickly the gap moves towards its settled value (per second).
+@export var gap_response: float = 0.3
+## Fastest the horde can close in (m/s). This is your warning time:
+## from 30 m it takes at least 10 s to reach you.
+@export var max_close_rate: float = 3.0
+## Fastest you can pull away from the horde (m/s).
+@export var max_open_rate: float = 1.5
+## Your speed is averaged over roughly this many seconds, so brief dips
+## don't instantly change the horde's behaviour.
+@export var speed_smoothing_time: float = 1.5
 
 @export_group("Surges")
 ## Random time between horde surges (seconds). Forces the occasional sprint.
 @export var surge_interval: Vector2 = Vector2(22.0, 34.0)
 @export var surge_duration: float = 6.0
-@export var surge_bonus_speed: float = 4.5
+## During a surge the settled gap shrinks by this many metres...
+@export var surge_gap_drop: float = 18.0
+## ...and the horde may close in this fast (m/s).
+@export var surge_close_rate: float = 4.5
 
 @export_group("Gate")
 ## While the team works the gate, the horde shuffles in to arrive after
@@ -47,9 +67,11 @@ const ZOMBIE_SCENE := preload("res://scenes/zombies/zombie.tscn")
 
 @export_group("Danger")
 ## Danger starts rising once the horde is closer than this (m).
-@export var danger_range: float = 60.0
-## The rearmost rider is caught at this gap (m).
-@export var catch_distance: float = 1.2
+@export var danger_range: float = 40.0
+## At this gap (m) the zombies grab the rearmost rider...
+@export var catch_distance: float = 1.5
+## ...who then has this many seconds to sprint free before the group is lost.
+@export var escape_time: float = 3.0
 
 signal surge_started
 
@@ -58,6 +80,8 @@ var phase: Phase = Phase.DORMANT
 var front_distance: float = -200.0
 var current_speed: float = 0.0
 var surging: bool = false
+## 0..1 while zombies are grabbing the rearmost rider; 1 = caught.
+var grab_progress: float = 0.0
 
 var route: Route
 
@@ -65,6 +89,7 @@ var _rng := RandomNumberGenerator.new()
 var _surge_left: float = 0.0
 var _next_surge: float = 0.0
 var _gate_speed: float = 2.0
+var _avg_speed: float = 0.0
 var _horde: Array[ZombieController] = []
 var _horde_offsets: Array[Vector2] = []  # x = metres behind front, y = lateral
 var _wanderers: Array[ZombieController] = []
@@ -117,30 +142,59 @@ func set_phase(new_phase: Phase, rearmost: float, hold_point: float = 0.0) -> vo
 			_gate_speed = clampf(to_cover / gate_arrival_time, gate_speed_range.x, gate_speed_range.y)
 		Phase.FINAL_ESCAPE:
 			_schedule_surge()
+			# Opening the gate in the nick of time is a save: the swinging gate
+			# shakes off any zombies grabbing the rearmost rider.
+			grab_progress = 0.0
+			front_distance = minf(front_distance, rearmost - 8.0)
 	phase = new_phase
 
 
-## Host only: advance the horde. `rearmost` = distance of the slowest rider.
-func simulate(delta: float, rearmost: float) -> void:
+## Host only: advance the horde. `rearmost` / `rear_speed` = distance and
+## speed of the slowest rider.
+func simulate(delta: float, rearmost: float, rear_speed: float) -> void:
+	_avg_speed = lerpf(_avg_speed, rear_speed, clampf(delta / speed_smoothing_time, 0.0, 1.0))
+	var old_front := front_distance
 	match phase:
 		Phase.DORMANT:
-			current_speed = 0.0
 			front_distance = rearmost - start_gap - 60.0
 		Phase.PURSUIT, Phase.FINAL_ESCAPE:
-			var base := pursuit_speed if phase == Phase.PURSUIT else final_escape_speed
-			var gap := rearmost - front_distance
-			var catch_up := maxf(0.0, gap - comfortable_gap) * catch_up_rate
 			_update_surge(delta)
-			current_speed = base + catch_up + (surge_bonus_speed if surging else 0.0)
-			front_distance = maxf(front_distance + current_speed * delta, rearmost - max_gap)
+			var gap := rearmost - front_distance
+			var target := get_target_gap(_avg_speed)
+			var close_limit := surge_close_rate if surging else max_close_rate
+			# How fast the gap may change, then move the horde at the rider's
+			# speed minus that change (it never walks backwards).
+			var change := clampf((target - gap) * gap_response, -close_limit, max_open_rate)
+			front_distance += maxf(rear_speed - change, 0.0) * delta
+			_apply_gap(clampf(rearmost - front_distance, 0.0, max_gap), rearmost, delta)
 		Phase.GATE:
-			current_speed = _gate_speed
-			front_distance += current_speed * delta
-		Phase.STOPPED:
-			current_speed = 0.0
+			# Riders are stuck at the gate: the horde shuffles in at a fixed pace.
+			_apply_gap(rearmost - front_distance - _gate_speed * delta, rearmost, delta)
 		Phase.OVERRUN:
-			current_speed = 3.0
-			front_distance = minf(front_distance + current_speed * delta, rearmost + 1.5)
+			front_distance = minf(front_distance + 3.0 * delta, rearmost + 1.5)
+	current_speed = 0.0 if phase == Phase.STOPPED else (front_distance - old_front) / maxf(delta, 0.0001)
+
+
+## The gap the horde drifts towards for a given rider speed.
+func get_target_gap(speed: float) -> float:
+	var pace := pursuit_pace if phase == Phase.PURSUIT else final_escape_pace
+	var target := base_gap + (speed - pace) * gap_per_mps
+	if surging:
+		target -= surge_gap_drop
+	# A target below zero means "push into the riders": the horde keeps
+	# closing at full rate instead of easing off as it reaches them.
+	return clampf(target, -10.0, max_gap)
+
+
+## Moves the horde to a new gap, handling the "grab" at the rider's wheel.
+func _apply_gap(new_gap: float, rearmost: float, delta: float) -> void:
+	if new_gap <= catch_distance:
+		new_gap = catch_distance
+		grab_progress = minf(grab_progress + delta / escape_time, 1.0)
+	elif new_gap > catch_distance + 0.5:
+		# Pulling away: the grip loosens (faster than it tightens).
+		grab_progress = maxf(grab_progress - delta * 2.0 / escape_time, 0.0)
+	front_distance = rearmost - new_gap
 
 
 func _schedule_surge() -> void:
@@ -170,25 +224,31 @@ func get_gap(rearmost: float) -> float:
 func get_danger(rearmost: float) -> float:
 	if phase == Phase.DORMANT or phase == Phase.STOPPED:
 		return 0.0
-	if phase == Phase.OVERRUN:
+	if phase == Phase.OVERRUN or grab_progress > 0.0:
 		return 1.0
 	return clampf(1.0 - (get_gap(rearmost) - catch_distance) / danger_range, 0.0, 1.0)
 
 
-func is_catching(rearmost: float) -> bool:
-	return phase in [Phase.PURSUIT, Phase.GATE, Phase.FINAL_ESCAPE] and get_gap(rearmost) <= catch_distance
+func is_grabbing() -> bool:
+	return grab_progress > 0.0 and phase in [Phase.PURSUIT, Phase.GATE, Phase.FINAL_ESCAPE]
+
+
+## True once the rearmost rider failed to break free in time.
+func is_catching(_rearmost: float = 0.0) -> bool:
+	return phase in [Phase.PURSUIT, Phase.GATE, Phase.FINAL_ESCAPE] and grab_progress >= 1.0
 
 
 # --- Network snapshot ----------------------------------------------------------
 
 func get_snapshot() -> Array:
-	return [phase, front_distance, current_speed, surging]
+	return [phase, front_distance, current_speed, surging, grab_progress]
 
 
 func apply_snapshot(snap: Array) -> void:
 	phase = snap[0] as Phase
 	current_speed = snap[2]
 	surging = snap[3]
+	grab_progress = snap[4]
 	# Ease towards the host's value to hide network jitter.
 	var host_front: float = snap[1]
 	if absf(host_front - front_distance) > 15.0:

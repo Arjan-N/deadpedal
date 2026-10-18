@@ -15,6 +15,9 @@ extends Node
 ##   --name=NAME            rider name      --ftp=W   rider FTP
 ##   --autopilot=W          replace keyboard input with a constant W watts
 ##   --autopilot-profile=T:W,T:W,...   watts changing at times T (seconds)
+##   --autopilot-react=W    with --autopilot: ride at W watts while the horde
+##                          surges or grabs (simulates a player who sprints)
+##   --log-horde            print the horde gap every 2 s (balance tuning)
 ##   --timescale=F          speed the game up (testing)
 ##   --screenshot=PATH      save screenshots; with --screenshot-at=S1,S2,...
 ##                          (seconds since the mission started). PATH may
@@ -99,7 +102,16 @@ func _process(delta: float) -> void:
 		_shot_index = 0
 		if options.has("exit-on-results"):
 			mission.mission_finished.connect(_on_mission_finished)
+	var prev_time := _mission_time
 	_mission_time += delta
+	if options.has("log-horde") and int(_mission_time / 2.0) != int(prev_time / 2.0):
+		var z := mission.zombies
+		print("[Horde] t=%5.1f stage=%s gap=%5.1f target=%5.1f speed=%4.1f surge=%s grab=%.2f" % [mission.elapsed,
+			MissionManager.STAGE_NAMES[mission.stage], mission.get_horde_gap(), z.get_target_gap(mission.get_rearmost_speed()),
+			mission.get_rearmost_speed(), z.surging, z.grab_progress])
+	if options.has("autopilot-react") and CyclingInputManager.source is ScriptedCyclingInput:
+		var react := mission.zombies.surging or mission.zombies.is_grabbing()
+		(CyclingInputManager.source as ScriptedCyclingInput).constant_watts = float(options["autopilot-react"] if react else options.get("autopilot", "200"))
 	if options.has("screenshot") and _shot_index < _shots.size() and _mission_time >= _shots[_shot_index]:
 		var path := String(options["screenshot"])
 		if path.contains("%d"):

@@ -138,6 +138,16 @@ func get_rearmost_distance() -> float:
 	return 0.0 if d == INF else d
 
 
+func get_rearmost_speed() -> float:
+	var d := INF
+	var v := 0.0
+	for c: CyclistController in cyclists.values():
+		if c.distance < d:
+			d = c.distance
+			v = c.speed
+	return v
+
+
 func get_lead_distance() -> float:
 	var d := 0.0
 	for c: CyclistController in cyclists.values():
@@ -254,12 +264,12 @@ func _host_update(delta: float) -> void:
 
 	if is_riding_stage():
 		elapsed += delta
-		zombies.simulate(delta, rear)
-		if zombies.is_catching(rear):
+		zombies.simulate(delta, rear, get_rearmost_speed())
+		if zombies.is_catching():
 			zombies.set_phase(ZombieDirector.Phase.OVERRUN, rear)
 			_finish(false)
 	elif stage == Stage.FAILED:
-		zombies.simulate(delta, rear)
+		zombies.simulate(delta, rear, 0.0)
 
 	_snapshot_timer -= delta
 	if _snapshot_timer <= 0.0 and stage != Stage.WAITING:

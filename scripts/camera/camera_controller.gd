@@ -46,8 +46,8 @@ func _process(delta: float) -> void:
 	_look_point = _look_point.lerp(look, t)
 
 	var shake := Vector3.ZERO
-	if danger_shake_enabled and danger > 0.7:
-		var amount := (danger - 0.7) / 0.3 * 0.05
+	if danger_shake_enabled and danger > 0.9:
+		var amount := (danger - 0.9) / 0.1 * 0.05
 		shake = Vector3(sin(_time * 23.0), sin(_time * 31.0 + 1.3), 0.0) * amount
 	look_at(_look_point + shake, Vector3.UP)
 

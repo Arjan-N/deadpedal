@@ -373,6 +373,16 @@ func _process(delta: float) -> void:
 		if mission.zombies.surging:
 			_danger_status.text = "SURGE!"
 			_danger_status.label_settings.font_color = COL_DANGER
+		if mission.zombies.is_grabbing():
+			# Show how long is left to break free.
+			var left := (1.0 - mission.zombies.grab_progress) * mission.zombies.escape_time
+			_danger_status.text = "GRABBED! %.1fs" % left
+			_danger_status.label_settings.font_color = COL_DANGER
+			_danger_bar.value = 1.0 - mission.zombies.grab_progress
+			_banner_title.text = "THEY'VE GOT YOU!"
+			_banner_sub.text = "Sprint to break free!" if mission.local_cyclist.distance - mission.get_rearmost_distance() < 1.0 \
+				else "A teammate is grabbed - drop back and tow them out!"
+			_banner_time = maxf(_banner_time, 0.5)
 	var heartbeat := pow(maxf(sin(_time * lerpf(5.0, 11.0, danger)), 0.0), 8.0)
 	var vm := _vignette.material as ShaderMaterial
 	vm.set_shader_parameter("intensity", smoothstep(0.3, 1.0, danger))

@@ -178,25 +178,54 @@ func test_zombie_director() -> void:
 	var z := ZombieDirector.new()
 	add_child(z)
 	z.route = r
+	z.surge_interval = Vector2(1000, 1000)  # no random surges in tests
 	check(z.get_danger(100.0) == 0.0, "no danger before pursuit")
 	z.set_phase(ZombieDirector.Phase.PURSUIT, 200.0)
 	check(is_equal_approx(z.get_gap(200.0), z.start_gap), "horde appears start_gap behind")
-	check(z.get_danger(200.0) > 0.0 and z.get_danger(200.0) < 0.3, "low danger at start (%.2f)" % z.get_danger(200.0))
-	# Rider stopped: horde catches up.
+
+	# Riding at different steady speeds settles at different, sensible gaps.
+	var gaps := {}
+	var pace := z.pursuit_pace
+	for speed: float in [pace - 2.0, pace, pace + 2.0, 15.0]:
+		var rider := 200.0
+		z.front_distance = rider - z.start_gap
+		z.grab_progress = 0.0
+		for i in 600:  # 60 s
+			rider += speed * 0.1
+			z.simulate(0.1, rider, speed)
+		gaps[speed] = z.get_gap(rider)
+	check(gaps[pace - 2.0] < gaps[pace] and gaps[pace] < gaps[pace + 2.0], "faster riding keeps the horde further back (%s)" % [gaps])
+	check(absf(gaps[pace] - z.base_gap) < 1.0, "riding at the horde's pace settles at base_gap")
+	check(gaps[15.0] <= z.max_gap + 0.01, "the horde never drops further back than max_gap")
+	check(gaps[pace - 2.0] > z.catch_distance, "slightly slow riding is dangerous but survivable")
+
+	# Stopping dead: warning time, then a grab, then caught.
+	var stop_at := 500.0
+	z.front_distance = stop_at - 30.0
+	z.grab_progress = 0.0
 	var t := 0.0
-	while not z.is_catching(200.0) and t < 60.0:
-		z.simulate(0.1, 200.0)
+	while not z.is_grabbing() and t < 60.0:
+		z.simulate(0.1, stop_at, 0.0)
 		t += 0.1
-	check(z.is_catching(200.0), "a stopped rider gets caught (after %.1fs)" % t)
-	# Very fast rider: horde never falls further behind than max_gap.
-	z.front_distance = 0.0
-	var rider := 100.0
-	for i in 600:
-		rider += 20.0 * 0.1
-		z.simulate(0.1, rider)
-	check(z.get_gap(rider) <= z.max_gap + 0.01, "horde gap is capped at max_gap")
+	check(t >= 30.0 / z.max_close_rate - 0.2, "from 30 m a stopped rider gets at least %.0f s warning (%.1f s)" % [30.0 / z.max_close_rate, t])
+	check(not z.is_catching(), "being grabbed is not instantly fatal")
+	var grabbed_for := 0.0
+	while not z.is_catching() and grabbed_for < 10.0:
+		z.simulate(0.1, stop_at, 0.0)
+		grabbed_for += 0.1
+	check(absf(grabbed_for - z.escape_time) < 0.25, "caught after escape_time of being grabbed (%.1f s)" % grabbed_for)
+
+	# Sprinting out of a grab.
+	z.front_distance = stop_at - z.catch_distance
+	z.grab_progress = 0.5
+	var rider2 := stop_at
+	for i in 40:  # 4 s of sprinting
+		rider2 += 15.0 * 0.1
+		z.simulate(0.1, rider2, 15.0)
+	check(not z.is_catching() and z.grab_progress == 0.0, "sprinting breaks free from a grab")
+
 	var near := z.get_danger(z.front_distance + 5.0)
-	var far := z.get_danger(z.front_distance + 50.0)
+	var far := z.get_danger(z.front_distance + 35.0)
 	check(near > far, "danger rises as the horde gets closer")
 	r.free()
 	z.free()
