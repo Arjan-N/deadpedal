@@ -4,3 +4,4 @@
 *.tmp
 # Test output
 /tests/output/
+/build/
