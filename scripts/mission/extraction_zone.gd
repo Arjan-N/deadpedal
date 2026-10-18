@@ -83,6 +83,7 @@ func _build() -> void:
 	_flare.omni_range = 22.0
 	add_child(_flare)
 	var smoke := CPUParticles3D.new()
+	smoke.local_coords = true  # the zone is moved into place after it's built
 	smoke.position = Vector3(3, 0.3, -8)
 	smoke.amount = 24
 	smoke.lifetime = 5.0

@@ -14,21 +14,28 @@ uniform float burnt = 0.0;
 varying vec3 local_pos;
 varying vec3 local_normal;
 varying vec3 world_pos;
-varying vec3 origin;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float hash3(vec3 p) { return hash(p.xz + p.y * 17.17); }
+// Integer hash: exact and stable for any (whole-number) input, unlike
+// sin()-based hashes which break down for large world coordinates on GPUs.
+float hash(vec2 p) {
+	uvec2 q = uvec2(ivec2(floor(p)) + ivec2(32768));
+	q *= uvec2(1597334673u, 3812015801u);
+	uint n = (q.x ^ q.y) * 1597334673u;
+	return float(n) / 4294967295.0;
+}
+float hash3(vec3 p) { return hash(p.xz + vec2(p.y * 17.0, p.y * 31.0)); }
 
 void vertex() {
 	local_pos = VERTEX;
 	local_normal = NORMAL;
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	origin = MODEL_MATRIX[3].xyz;
 }
 
 void fragment() {
-	float h = hash3(floor(origin));
-	float h2 = hash3(floor(origin) + 3.1);
+	// Per-building variation from the object's position (same for every pixel).
+	vec3 origin = floor(MODEL_MATRIX[3].xyz);
+	float h = hash3(origin);
+	float h2 = hash3(origin + 3.0);
 	vec3 wall = h < 0.33 ? color_a : (h < 0.66 ? color_b : color_c);
 	wall *= 0.8 + 0.4 * h2;
 	vec3 col = wall;
@@ -44,10 +51,10 @@ void fragment() {
 		vec2 cell = vec2(u / cell_width + 0.5, (height_above_ground - 0.2) / floor_height);
 		vec2 id = floor(cell);
 		vec2 f = fract(cell);
-		float r = hash(id + floor(origin.xz));
+		float r = hash(id + origin.xz);
 
 		// Vertical rain streaks / grime.
-		float streak = hash(vec2(floor(u * 2.0), floor(origin.x))) * 0.25;
+		float streak = hash(vec2(floor(u * 2.0), origin.x)) * 0.25;
 		col *= 1.0 - streak * smoothstep(0.0, 1.0, f.y);
 		col *= mix(0.55, 1.0, smoothstep(0.0, 2.5, height_above_ground));
 

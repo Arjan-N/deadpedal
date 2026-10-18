@@ -7,7 +7,14 @@ uniform vec3 dirt_color : source_color = vec3(0.17, 0.14, 0.11);
 
 varying vec3 world_pos;
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// Integer hash: exact and stable for any (whole-number) input, unlike
+// sin()-based hashes which break down for large world coordinates on GPUs.
+float hash(vec2 p) {
+	uvec2 q = uvec2(ivec2(floor(p)) + ivec2(32768));
+	q *= uvec2(1597334673u, 3812015801u);
+	uint n = (q.x ^ q.y) * 1597334673u;
+	return float(n) / 4294967295.0;
+}
 float noise(vec2 p) {
 	vec2 i = floor(p); vec2 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);

@@ -43,6 +43,9 @@ var _team_panel: PanelContainer
 var _team_list: VBoxContainer
 var _dev_panel: PanelContainer
 var _dev_label: Label
+var _mirror: PanelContainer
+var _mirror_style: StyleBoxFlat
+var _mirror_cam: Camera3D
 var _results: PanelContainer
 var _results_box: VBoxContainer
 var _time: float = 0.0
@@ -234,12 +237,11 @@ func _build() -> void:
 	_gate_list = _label(gv, "", 22, COL_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 	_gate_panel.visible = false
 
-	# Top-right: team (multiplayer only).
+	# Left, under the dev panel: team (multiplayer only).
 	_team_panel = _panel(root)
-	_team_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_team_panel.offset_right = -20
-	_team_panel.offset_top = 20
-	_team_panel.offset_left = -300
+	_team_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_team_panel.offset_left = 20
+	_team_panel.offset_top = 150
 	_team_list = VBoxContainer.new()
 	_team_panel.add_child(_team_list)
 	_team_panel.visible = mission.cyclists.size() > 1
@@ -251,7 +253,46 @@ func _build() -> void:
 	_dev_panel.offset_top = 20
 	_dev_label = _label(_dev_panel, "", 16, COL_DIM)
 
+	_build_mirror(root)
 	_build_results(root)
+
+
+## Rear-view mirror: a second camera looking back at the horde, rendered into
+## a small SubViewport that shares the main 3D world.
+func _build_mirror(root: Control) -> void:
+	_mirror = PanelContainer.new()
+	_mirror_style = StyleBoxFlat.new()
+	_mirror_style.bg_color = Color.BLACK
+	_mirror_style.set_border_width_all(4)
+	_mirror_style.border_color = Color(0.2, 0.2, 0.2)
+	_mirror_style.set_corner_radius_all(8)
+	_mirror.add_theme_stylebox_override("panel", _mirror_style)
+	_mirror.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_mirror)
+	_mirror.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_mirror.offset_left = -318
+	_mirror.offset_right = -20
+	_mirror.offset_top = 14
+	_mirror.offset_bottom = 172
+	var container := SubViewportContainer.new()
+	container.stretch = true
+	container.custom_minimum_size = Vector2(290, 150)
+	container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_mirror.add_child(container)
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(290, 150)
+	viewport.audio_listener_enable_3d = false
+	container.add_child(viewport)
+	_mirror_cam = Camera3D.new()
+	_mirror_cam.fov = 58.0
+	_mirror_cam.far = 200.0
+	_mirror_cam.current = true
+	viewport.add_child(_mirror_cam)
+	var title := _label(_mirror, "REAR VIEW", 16, COL_DIM)
+	title.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	title.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_mirror.visible = false
 
 
 func _build_results(root: Control) -> void:
@@ -296,6 +337,10 @@ func _process(delta: float) -> void:
 	_objective.text = mission.get_objective_text()
 	var next := mission.get_next_objective()
 	_next_objective.text = "%s  %d m" % [next[0], roundi(next[1])] if mission.is_riding_stage() else ""
+	var waiting_to_ride := mission.stage in [MissionManager.Stage.COUNTDOWN, MissionManager.Stage.DEPARTURE, MissionManager.Stage.PURSUIT]
+	if waiting_to_ride and me.power_watts < 1.0:
+		var hint := "  (keyboard: press 3)" if CyclingInputManager.get_source_type() == CyclingInputSource.SourceType.SIMULATED else ""
+		_next_objective.text = "START PEDALLING!" + hint
 	_route_bar.total = mission.extraction_distance
 	_route_bar.gate_at = mission.gate_distance
 	_route_bar.gate_open = mission.gate.is_open
@@ -360,8 +405,23 @@ func _process(delta: float) -> void:
 		_banner_time -= delta
 		_banner.modulate.a = minf(1.0, _banner_time * 2.0)
 
+	_update_mirror(danger)
 	_update_team()
 	_update_dev()
+
+
+func _update_mirror(danger: float) -> void:
+	var active := mission.zombies.phase != ZombieDirector.Phase.DORMANT and not _results.visible
+	_mirror.visible = active
+	if not active:
+		return
+	var me := mission.local_cyclist
+	var route := mission.route
+	# Just ahead of and above the rider, looking back down the road.
+	_mirror_cam.global_position = route.get_point(me.distance + 2.5, me.lane_offset * 0.5) + Vector3.UP * 2.6
+	_mirror_cam.look_at(route.get_point(me.distance - 16.0) + Vector3.UP * 0.4, Vector3.UP)
+	var flash := danger > 0.6 and int(_time * 5.0) % 2 == 0
+	_mirror_style.border_color = COL_DANGER if flash else Color(0.25, 0.25, 0.25)
 
 
 func _update_team() -> void:

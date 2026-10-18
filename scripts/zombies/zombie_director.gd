@@ -21,7 +21,7 @@ const ZOMBIE_SCENE := preload("res://scenes/zombies/zombie.tscn")
 ## Base horde speed (m/s) while chasing. Easy riding roughly matches it.
 @export var pursuit_speed: float = 8.0
 ## Horde speed after the gate opens - the final escape is harder.
-@export var final_escape_speed: float = 9.5
+@export var final_escape_speed: float = 9.2
 ## Gap (m) behind the rearmost rider where the horde first appears.
 @export var start_gap: float = 55.0
 ## Beyond this gap the horde speeds up, so riders can't escape completely.
@@ -37,7 +37,7 @@ const ZOMBIE_SCENE := preload("res://scenes/zombies/zombie.tscn")
 ## Random time between horde surges (seconds). Forces the occasional sprint.
 @export var surge_interval: Vector2 = Vector2(22.0, 34.0)
 @export var surge_duration: float = 6.0
-@export var surge_bonus_speed: float = 5.0
+@export var surge_bonus_speed: float = 4.5
 
 @export_group("Gate")
 ## While the team works the gate, the horde shuffles in to arrive after

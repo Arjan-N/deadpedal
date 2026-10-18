@@ -3,11 +3,18 @@
 shader_type spatial;
 
 uniform float road_width = 10.0;
-uniform vec3 asphalt_color : source_color = vec3(0.22, 0.22, 0.225);
+uniform vec3 asphalt_color : source_color = vec3(0.27, 0.27, 0.275);
 uniform vec3 line_color : source_color = vec3(0.75, 0.74, 0.68);
 uniform vec3 moss_color : source_color = vec3(0.17, 0.22, 0.1);
 
-float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// Integer hash: exact and stable for any (whole-number) input, unlike
+// sin()-based hashes which break down for large world coordinates on GPUs.
+float hash(vec2 p) {
+	uvec2 q = uvec2(ivec2(floor(p)) + ivec2(32768));
+	q *= uvec2(1597334673u, 3812015801u);
+	uint n = (q.x ^ q.y) * 1597334673u;
+	return float(n) / 4294967295.0;
+}
 float noise(vec2 p) {
 	vec2 i = floor(p); vec2 f = fract(p);
 	f = f * f * (3.0 - 2.0 * f);

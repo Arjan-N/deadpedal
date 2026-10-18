@@ -114,12 +114,6 @@ func return_to_menu(message: String = "") -> void:
 	get_tree().change_scene_to_file(MENU_SCENE)
 
 
-## Host only: allow new players to join again (back in the lobby).
-func reopen_lobby() -> void:
-	if is_online and is_host():
-		multiplayer.multiplayer_peer.refuse_new_connections = false
-
-
 @rpc("authority", "call_local", "reliable")
 func _net_load_mission(roster: Dictionary) -> void:
 	players = roster

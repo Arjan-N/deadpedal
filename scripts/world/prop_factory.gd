@@ -208,6 +208,7 @@ static func sign_label(text: String, color: Color, size: int = 64) -> Label3D:
 
 static func _fire_particles() -> CPUParticles3D:
 	var p := CPUParticles3D.new()
+	p.local_coords = true
 	p.amount = 28
 	p.lifetime = 0.9
 	p.position = Vector3(0, 1.0, 0)
@@ -244,6 +245,7 @@ static func _fire_particles() -> CPUParticles3D:
 
 static func _smoke_particles() -> CPUParticles3D:
 	var p := CPUParticles3D.new()
+	p.local_coords = true
 	p.amount = 16
 	p.lifetime = 4.0
 	p.position = Vector3(0, 2.0, 0)
