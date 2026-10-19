@@ -11,6 +11,7 @@ extends Node3D
 enum Behaviour {
 	HORDE,     ## Placed each frame by ZombieDirector at the chasing horde.
 	WANDERER,  ## Idles by the roadside, lurches at riders who pass close by.
+	RUNNER,    ## Sprints ahead of the horde (placed by ZombieDirector).
 }
 
 const SKIN_TONES: Array[Color] = [Color(0.45, 0.5, 0.4), Color(0.5, 0.48, 0.42), Color(0.38, 0.42, 0.36), Color(0.55, 0.5, 0.45)]
@@ -27,6 +28,8 @@ var move_speed: float = 0.0
 ## Horde targets (set by ZombieDirector).
 var target_position: Vector3
 var target_facing: Vector3 = Vector3.FORWARD
+## Jump straight to target_position next frame (e.g. a runner reappearing).
+var snap_to_target := false
 
 var _rng := RandomNumberGenerator.new()
 var _phase: float = 0.0
@@ -85,11 +88,15 @@ func _build() -> void:
 		MeshKit.capsule(shoulder, 0.06, 0.7, Vector3(0, 0, -0.3), skin, Vector3(90, 0, 0))
 		_arms.append(shoulder)
 	_body.rotation.x = deg_to_rad(_rng.randf_range(-22, -8))
+	if behaviour == Behaviour.RUNNER:
+		# Leaner and leaning hard into the sprint.
+		scale = Vector3(0.95, 1.05, 0.95)
+		_body.rotation.x = deg_to_rad(-35)
 
 
 func _process(delta: float) -> void:
 	match behaviour:
-		Behaviour.HORDE:
+		Behaviour.HORDE, Behaviour.RUNNER:
 			_update_horde(delta)
 		Behaviour.WANDERER:
 			pass  # driven by update_wanderer() from ZombieDirector
@@ -97,9 +104,10 @@ func _process(delta: float) -> void:
 
 
 func _update_horde(delta: float) -> void:
-	if not _initialised:
+	if not _initialised or snap_to_target:
 		global_position = target_position
 		_initialised = true
+		snap_to_target = false
 	var before := global_position
 	global_position = global_position.lerp(target_position, clampf(delta * 6.0, 0.0, 1.0))
 	if target_facing.length_squared() > 0.001:
@@ -144,6 +152,11 @@ func _animate(delta: float) -> void:
 	_legs[1].rotation.x = -swing
 	_body.rotation.z = sin(_phase) * 0.12
 	_body.position.y = 0.9 + absf(sin(_phase)) * 0.05 * walk
+	if behaviour == Behaviour.RUNNER:
+		# Arms pumping instead of reaching.
+		_arms[0].rotation.x = -1.0 + swing * 0.8
+		_arms[1].rotation.x = -1.0 - swing * 0.8
+		return
 	_arms[0].rotation.x = sin(_phase * 0.7) * 0.25 + 0.1
 	_arms[1].rotation.x = sin(_phase * 0.7 + 1.5) * 0.25 + 0.1
 	_head.rotation.z = sin(_phase * 0.5) * 0.3

@@ -182,6 +182,21 @@ func get_progress_markers() -> Array:
 	return []
 
 
+## Rows for the HUD's companion panel: Array of [name, energy 0..1, status, Color].
+func get_companion_rows() -> Array:
+	return []
+
+
+## Host: extra mode state for the snapshot (see _apply_mode_snapshot).
+func _mode_snapshot() -> Array:
+	return []
+
+
+## Clients: the host's mode state from _mode_snapshot().
+func _apply_mode_snapshot(_data: Array) -> void:
+	pass
+
+
 ## Host: all riders who are close enough to the gate wind it.
 func _work_gate(delta: float, extra_effort: float = 0.0) -> void:
 	var efforts := {}
@@ -351,7 +366,7 @@ func _host_update(delta: float) -> void:
 	_snapshot_timer -= delta
 	if _snapshot_timer <= 0.0 and stage != Stage.WAITING:
 		_snapshot_timer = 1.0 / snapshot_rate
-		_net_snapshot.rpc(elapsed, zombies.get_snapshot(), gate.progress, gate.team_effort_rate, gate.contributions)
+		_net_snapshot.rpc(elapsed, zombies.get_snapshot(), gate.progress, gate.team_effort_rate, gate.contributions, _mode_snapshot())
 
 
 ## Each machine limits its own rider: the closed gate blocks the road.
@@ -431,9 +446,10 @@ func _net_set_stage(new_stage: Stage) -> void:
 
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func _net_snapshot(p_elapsed: float, zombie_snap: Array, gate_progress: float, gate_rate: float, contributions: Dictionary) -> void:
+func _net_snapshot(p_elapsed: float, zombie_snap: Array, gate_progress: float, gate_rate: float, contributions: Dictionary, mode_snap: Array) -> void:
 	elapsed = p_elapsed
 	zombies.apply_snapshot(zombie_snap)
+	_apply_mode_snapshot(mode_snap)
 	if not gate.is_open:
 		gate.progress = gate_progress
 	gate.team_effort_rate = gate_rate

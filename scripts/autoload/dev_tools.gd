@@ -20,8 +20,9 @@ extends Node
 ##   --autopilot-profile=T:W,T:W,...   watts changing at times T (seconds)
 ##   --autopilot-react=W    with --autopilot: ride at W watts while the horde
 ##                          surges or grabs (simulates a player who sprints)
-##   --autopilot-pickup     with --autopilot (endless mode): stop pedalling
-##                          before waiting survivors so they get picked up
+##   --autopilot-pickup     with --autopilot (endless mode): ease off for
+##                          survivors, crates and exhausted companions, and
+##                          sprint past screamers
 ##   --log-horde            print the horde gap every 2 s (balance tuning)
 ##   --timescale=F          speed the game up (testing)
 ##   --screenshot=PATH      save screenshots; with --screenshot-at=S1,S2,...
@@ -43,6 +44,10 @@ var _exit_pending := false
 var _auto_start_players: int = 0
 var _real_time: float = 0.0
 var _results_seen: int = 0
+## Autopilot sprint reserve (joules above FTP, like a rider's W'), so test
+## riders can't sprint forever.
+const AUTOPILOT_RESERVE := 18000.0
+var _reserve: float = AUTOPILOT_RESERVE
 
 
 func _ready() -> void:
@@ -107,6 +112,7 @@ func _process(delta: float) -> void:
 		_mission_ref = weakref(mission)
 		_mission_time = 0.0
 		_shot_index = 0
+		_reserve = AUTOPILOT_RESERVE
 		if options.has("exit-on-results"):
 			mission.mission_finished.connect(_on_mission_finished)
 	var prev_time := _mission_time
@@ -118,13 +124,33 @@ func _process(delta: float) -> void:
 			mission.get_rearmost_speed(), z.surging, z.grab_progress])
 	if CyclingInputManager.source is ScriptedCyclingInput and (options.has("autopilot-react") or options.has("autopilot-pickup")):
 		var watts := float(options.get("autopilot", "200"))
-		if options.has("autopilot-react") and (mission.zombies.surging or mission.zombies.is_grabbing()):
-			watts = float(options["autopilot-react"])
-		elif options.has("autopilot-pickup") and mission is EndlessMission and mission.local_cyclist:
-			var ahead := (mission as EndlessMission).distance_to_next_survivor(mission.local_cyclist.distance)
-			if ahead >= 0.0 and ahead < 70.0:
-				# Ease off and keep rolling past the survivor at ~15 km/h.
-				watts = 0.0 if mission.local_cyclist.speed > 4.0 else 30.0
+		var sprint := float(options.get("autopilot-react", str(watts * 1.8)))
+		var me := mission.local_cyclist
+		var runner_close := me != null and mission.zombies.nearest_runner_gap(me.distance) < 40.0
+		var endless := mission as EndlessMission
+		if options.has("autopilot-react") and (mission.zombies.surging or mission.zombies.is_grabbing() or runner_close):
+			watts = sprint
+		elif options.has("autopilot-pickup") and endless and me:
+			var screamer := endless.distance_to_next_screamer(me.distance)
+			var exhausted := endless.exhausted_companion_gap(me.distance)
+			var pickup := endless.distance_to_next_pickup(me.distance)
+			if screamer >= 0.0 and screamer < 90.0:
+				watts = sprint  # fly past screamers
+			elif exhausted > 6.0:
+				watts = 0.0 if me.speed > 4.0 else 30.0  # let them catch your wheel
+			elif pickup >= 0.0 and pickup < 80.0:
+				# Brake just enough to roll past the survivor / crate at ~18 km/h.
+				var brake_speed := sqrt(5.0 * 5.0 + 2.0 * 1.1 * maxf(pickup - 4.0, 0.0))
+				if me.speed > brake_speed:
+					watts = 0.0
+		# Sprints above FTP drain the reserve; riding below FTP refills it.
+		var ftp := CyclingInputManager.rider_ftp_watts
+		if watts > ftp and _reserve <= 0.0:
+			watts = ftp
+		if watts > ftp:
+			_reserve -= (watts - ftp) * delta
+		else:
+			_reserve = minf(_reserve + (ftp - watts) * 0.5 * delta, AUTOPILOT_RESERVE)
 		(CyclingInputManager.source as ScriptedCyclingInput).constant_watts = watts
 	if options.has("screenshot") and _shot_index < _shots.size() and _mission_time >= _shots[_shot_index]:
 		var path := String(options["screenshot"])

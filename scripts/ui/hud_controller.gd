@@ -45,6 +45,8 @@ var _gate_pct: Label
 var _gate_list: Label
 var _team_panel: PanelContainer
 var _team_list: VBoxContainer
+var _companion_panel: PanelContainer
+var _companion_list: VBoxContainer
 var _dev_panel: PanelContainer
 var _dev_label: Label
 var _mirror: PanelContainer
@@ -243,14 +245,26 @@ func _build() -> void:
 	_gate_list = _label(gv, "", 22, COL_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 	_gate_panel.visible = false
 
-	# Left, under the dev panel: team (multiplayer only).
-	_team_panel = _panel(root)
-	_team_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_team_panel.offset_left = 20
-	_team_panel.offset_top = 150
+	# Left, under the dev panel: team (multiplayer only) and survivors riding
+	# with the group (Endless Survival).
+	var left := VBoxContainer.new()
+	left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	left.add_theme_constant_override("separation", 10)
+	root.add_child(left)
+	left.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	left.offset_left = 20
+	left.offset_top = 150
+	_team_panel = _panel(left)
 	_team_list = VBoxContainer.new()
 	_team_panel.add_child(_team_list)
 	_team_panel.visible = mission.cyclists.size() > 1
+	_companion_panel = _panel(left)
+	var cv := VBoxContainer.new()
+	_companion_panel.add_child(cv)
+	_label(cv, "SURVIVORS", 20, COL_DIM)
+	_companion_list = VBoxContainer.new()
+	cv.add_child(_companion_list)
+	_companion_panel.visible = false
 
 	# Top-left: development input info (F1 to hide).
 	_dev_panel = _panel(root, 0.35)
@@ -335,7 +349,7 @@ func _process(delta: float) -> void:
 	_effort_bar.value = me.effort
 	_effort_label.text = "EFFORT %d%%" % roundi(me.effort * 100.0)
 	_cadence.text = "%d rpm" % roundi(me.cadence) if me.cadence >= 0.0 else ""
-	_draft.text = "SLIPSTREAM +%d%%" % roundi(me.ride_model.draft_bonus * 100.0) if me.is_drafting else ""
+	_draft.text = "SLIPSTREAM +%d%%  behind %s" % [roundi(me.ride_model.draft_bonus * 100.0), me.drafting_behind] if me.is_drafting else ""
 	_update_gear(delta)
 	var effort_fill := (_effort_bar.get_theme_stylebox("fill") as StyleBoxFlat)
 	effort_fill.bg_color = Color(0.3, 0.8, 1.0).lerp(Color(1.0, 0.35, 0.1), me.effort)
@@ -345,7 +359,7 @@ func _process(delta: float) -> void:
 	var next := mission.get_next_objective()
 	_next_objective.text = "%s  %d m" % [next[0], roundi(next[1])] if mission.is_riding_stage() else ""
 	var waiting_to_ride := mission.stage in [MissionManager.Stage.COUNTDOWN, MissionManager.Stage.DEPARTURE, MissionManager.Stage.PURSUIT]
-	if waiting_to_ride and me.power_watts < 1.0:
+	if waiting_to_ride and me.power_watts < 1.0 and me.speed < 1.0:
 		var hint := "  (keyboard: press 3)" if CyclingInputManager.source is SimulatedCyclingInput else ""
 		_next_objective.text = "START PEDALLING!" + hint
 	if not CyclingInputManager.is_input_valid() and mission.stage != MissionManager.Stage.SUCCESS and mission.stage != MissionManager.Stage.FAILED:
@@ -391,6 +405,10 @@ func _process(delta: float) -> void:
 		if mission.zombies.surging:
 			_danger_status.text = "SURGE!"
 			_danger_status.label_settings.font_color = COL_DANGER
+		var runner_gap := mission.zombies.nearest_runner_gap(mission.get_rearmost_distance())
+		if runner_gap < INF:
+			_danger_status.text = "RUNNER %d m - SPRINT!" % maxi(roundi(runner_gap), 0)
+			_danger_status.label_settings.font_color = COL_DANGER if int(_time * 4.0) % 2 == 0 else COL_WARN
 		if mission.zombies.is_grabbing():
 			# Show how long is left to break free.
 			var left := (1.0 - mission.zombies.grab_progress) * mission.zombies.escape_time
@@ -435,6 +453,7 @@ func _process(delta: float) -> void:
 
 	_update_mirror(danger)
 	_update_team()
+	_update_companions()
 	_update_dev()
 
 
@@ -486,6 +505,40 @@ func _update_team() -> void:
 		l.label_settings.font_color = c.jersey_color.lightened(0.25)
 
 
+## Survivors riding with the group: name, energy bar and what they're doing.
+func _update_companions() -> void:
+	var rows := mission.get_companion_rows()
+	_companion_panel.visible = rows.size() > 0 and not _results.visible
+	if not _companion_panel.visible:
+		return
+	while _companion_list.get_child_count() < rows.size():
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		_companion_list.add_child(row)
+		var name_label := _label(row, "", 22)
+		name_label.custom_minimum_size.x = 90
+		var bar := _bar(row, Vector2(120, 18), COL_GOOD)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		_label(row, "", 20)
+	for i in _companion_list.get_child_count():
+		var row := _companion_list.get_child(i) as HBoxContainer
+		row.visible = i < rows.size()
+		if not row.visible:
+			continue
+		var r: Array = rows[i]
+		var color: Color = r[3]
+		var tired: bool = r[1] < 0.3
+		var name_label := row.get_child(0) as Label
+		name_label.text = r[0]
+		name_label.label_settings.font_color = color
+		var bar := row.get_child(1) as ProgressBar
+		bar.value = r[1]
+		(bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = COL_DANGER.lerp(COL_GOOD, clampf(r[1] / 0.6, 0.0, 1.0))
+		var status := row.get_child(2) as Label
+		status.text = r[2]
+		status.label_settings.font_color = color if not tired or int(_time * 3.0) % 2 == 0 else COL_TEXT
+
+
 func _update_dev() -> void:
 	if not _dev_panel.visible:
 		return
@@ -515,7 +568,9 @@ func _endless_result_rows(grid: GridContainer, r: Dictionary, t: float) -> void:
 		["SCORE", "%d" % int(r.get("score", 0))],
 		["Time survived", "%d:%02d" % [int(t) / 60, int(t) % 60]],
 		["Checkpoints opened", "%d" % int(r.get("checkpoints", 0))],
-		["Survivors rescued", "%d" % int(r.get("survivors_rescued", 0))],
+		["Survivors rescued", "%d  (%d lost)" % [int(r.get("survivors_rescued", 0)), int(r.get("survivors_lost", 0))]],
+		["Supplies grabbed", "%d" % int(r.get("crates", 0))],
+		["Screamers set off", "%d" % int(r.get("screamers", 0))],
 		["Highest speed", "%.1f km/h" % (float(r.get("my_max_speed", 0.0)) * 3.6)],
 	]
 	for row: Array in rows:

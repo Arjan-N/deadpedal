@@ -273,3 +273,15 @@ static func _smoke_particles() -> CPUParticles3D:
 	ramp.set_color(1, Color(0.2, 0.2, 0.2, 0.0))
 	p.color_ramp = ramp
 	return p
+
+
+## Coloured signal smoke (supply crates).
+static func signal_smoke(color: Color) -> CPUParticles3D:
+	var p := _smoke_particles()
+	p.position = Vector3(0, 0.8, 0)
+	p.amount = 20
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(color, 0.75))
+	ramp.set_color(1, Color(color.darkened(0.3), 0.0))
+	p.color_ramp = ramp
+	return p

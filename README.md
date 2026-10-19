@@ -79,10 +79,25 @@ forest and open farmland. Ride as far as you can.
 - **Checkpoint gates** every 2 km: pedal together to wind them open. Each one
   needs a bit more effort than the last.
 - **Survivors** wait by the road, waving a red flare (green marks on the
-  progress bar). **Slow to 20 km/h** as you pass to pick one up (up to 3). They
-  ride at the back of the group and help wind the gates. When the horde grabs
-  you, a survivor is taken instead, and the horde stops to feed. Sprint during
-  the grab and you can save them too.
+  progress bar). **Slow to 20 km/h** as you pass to pick one up (up to 3).
+  - They take turns **on the front**: ride 2–10 m behind one for a +10%
+    slipstream. Sprint past them and they tuck in behind you for a while.
+  - Pulling tires them out (their energy shows on the left of the screen).
+    An **exhausted** survivor drops back towards the horde: ease off and let
+    them catch your wheel (ride just in front of them) for a few seconds and
+    they recover. Leave them and the horde gets them.
+  - They help wind the gates, and when the horde grabs you, a survivor is
+    taken instead (an exhausted one first). Sprint during the grab to save
+    them too.
+- **Screamers** (purple marks) stand by the road with their arms up. Pass them
+  **faster than 30 km/h** or they shriek and the horde surges.
+- **Supply crates** (red or yellow smoke): slow to 20 km/h to grab them.
+  **Flares** drive the horde back; **food** gives your survivors their energy
+  back.
+- **Runners** break out of the horde now and then after the first checkpoint
+  ("RUNNER!" and a red warning in the horde panel). Sprint before one reaches
+  you, or it knocks you off your rhythm (you lose a third of your speed).
+  Runners also go for exhausted survivors.
 - **Score** = metres ridden + 500 per checkpoint + 250 per survivor rescued.
   The best 10 runs are saved on your PC; your best shows on the title screen.
 - Every run has a new random world. In multiplayer, everyone gets the same one.
@@ -229,6 +244,7 @@ scripts/
     mission_manager.gd           Stages, rules, authority, results (+ mode hooks)
     endless_mission.gd           Endless Survival: checkpoints, difficulty, survivors
     survivor.gd, companion.gd    Survivors by the road / riding with the group
+    screamer.gd, supply_crate.gd Other roadside encounters
     high_scores.gd               Endless high-score table (saved locally)
     gate_objective.gd            Cooperative gate (team effort)
     extraction_zone.gd           Safe zone visuals
@@ -257,8 +273,11 @@ tests/unit_tests.tscn            Automated checks
 - **Road shape:** the `Route` node's **Control Points**.
 - **Endless mode:** select the `Mission` root in `endless_survival.tscn`:
   checkpoint spacing, how fast the horde speeds up (`Pace Increase Per Km`,
-  `Max Pace`), gate effort, survivor chance, pick-up speed, max survivors,
-  and score values.
+  `Max Pace`), gate effort, how often survivors / screamers / crates appear
+  (`Roadside`), survivor energy (`Front Drain`, `Group Recovery`,
+  `Wheel Recovery`...), runners (`Runners From`, `Runner Interval`,
+  `Runner Slowdown`) and score values. Runner speed is on the `Zombies` node
+  (`Runner Speed Bonus`, `Runner Max Speed`).
 
 ### How the cycling input works
 
@@ -292,9 +311,10 @@ godot --headless --path . -- --solo --autopilot=90 --timescale=4 --exit-on-resul
 godot --headless --path . -- --host --auto-start=2 --autopilot=220 --timescale=3 --exit-on-results
 godot --headless --path . -- --join=127.0.0.1 --ftp=150 --autopilot=150 --timescale=3 --exit-on-results
 
-# Endless Survival with a fixed world; the autopilot slows down for survivors.
-# Watch the log for "Picked up", "taken by the horde" and "Checkpoint" lines.
-godot --headless --path . -- --solo --mode=endless --seed=42 --autopilot=155 --autopilot-pickup --timescale=10 --exit-on-results
+# Endless Survival with a fixed world. The autopilot slows for survivors and
+# crates, sprints past screamers and runners (with a limited sprint reserve)
+# and drops back for exhausted survivors. Watch the log for "[Endless]" lines.
+godot --headless --path . -- --solo --mode=endless --seed=7 --autopilot=150 --autopilot-pickup --autopilot-react=270 --timescale=10 --exit-on-results
 ```
 
 `tests/run_all_tests.sh` runs all of the above. Other options are listed at the

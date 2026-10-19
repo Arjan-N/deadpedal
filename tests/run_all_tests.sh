@@ -27,14 +27,17 @@ result "solo: weak rider is caught" 2 $?
 "$GODOT" --headless --path . -- --solo --autopilot=60 --timescale=6 --exit-on-results --replays=1 --quit-after=120 > "$LOG_DIR/solo_replay.log" 2>&1
 result "solo: replay restarts the mission" 2 $?
 
-# Endless Survival: a rider who picks up survivors loses one to the horde
-# before being caught; the world seed is fixed so the run is repeatable.
-"$GODOT" --headless --path . -- --solo --mode=endless --seed=42 --autopilot=155 --autopilot-pickup --timescale=10 --exit-on-results --quit-after=150 > "$LOG_DIR/endless_solo.log" 2>&1
+# Endless Survival: a rider who picks up survivors rides behind them until
+# one is exhausted; then they're either rescued or taken by the horde. The
+# world seed is fixed; the run is cut short by --quit-after (exit 3) unless
+# the horde wins first (exit 2).
+"$GODOT" --headless --path . -- --solo --mode=endless --seed=7 --autopilot=150 --autopilot-pickup --autopilot-react=270 --timescale=12 --exit-on-results --quit-after=75 > "$LOG_DIR/endless_solo.log" 2>&1
 CODE=$?
-if [ "$CODE" = 2 ] && grep -q "Picked up" "$LOG_DIR/endless_solo.log" && grep -q "taken by the horde" "$LOG_DIR/endless_solo.log"; then
-	result "endless: survivors picked up, one taken by the horde, then caught" 0 0
+if { [ "$CODE" = 2 ] || [ "$CODE" = 3 ]; } && grep -q "Picked up" "$LOG_DIR/endless_solo.log" && grep -q "is exhausted" "$LOG_DIR/endless_solo.log" \
+		&& grep -qE "taken by the horde|back with the group" "$LOG_DIR/endless_solo.log" && ! grep -q "SCRIPT ERROR" "$LOG_DIR/endless_solo.log"; then
+	result "endless: survivors picked up, pull on the front, get exhausted" 0 0
 else
-	result "endless: survivors picked up, one taken by the horde, then caught" 2 "$CODE"
+	result "endless: survivors picked up, pull on the front, get exhausted" 2 "$CODE"
 fi
 
 PORT=$((20000 + RANDOM % 20000))
@@ -63,7 +66,7 @@ HOST_PID=$!
 sleep 2
 "$GODOT" --headless --path . -- --join=127.0.0.1 --port=$PORT --ftp=170 --autopilot=140 --autopilot-react=270 --timescale=10 --exit-on-results --quit-after=110 > "$LOG_DIR/endless_client.log" 2>&1
 wait $HOST_PID
-EVENTS="Stage -> [A-Z_]*|Checkpoint [0-9]* passed|Picked up [A-Za-z]*|Left [A-Za-z]* behind|[A-Za-z]* was taken"
+EVENTS="Stage -> [A-Z_]*|Checkpoint [0-9]* passed|Picked up [A-Za-z]*|Left [A-Za-z]* behind|[A-Za-z]* was taken|[A-Za-z]* is exhausted|[A-Za-z]* is back with the group|screamer went off|Sprinted past a screamer|Grabbed [a-z]*|Missed a crate|runner breaks|runner caught [A-Za-z]*"
 grep -oE "$EVENTS" "$LOG_DIR/endless_host.log" > "$LOG_DIR/endless_host.events"
 grep -oE "$EVENTS" "$LOG_DIR/endless_client.log" > "$LOG_DIR/endless_client.events"
 N=$(( $(wc -l < "$LOG_DIR/endless_host.events") < $(wc -l < "$LOG_DIR/endless_client.events") ? $(wc -l < "$LOG_DIR/endless_host.events") : $(wc -l < "$LOG_DIR/endless_client.events") ))

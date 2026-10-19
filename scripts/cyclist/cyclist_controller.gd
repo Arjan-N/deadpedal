@@ -30,6 +30,8 @@ var effort: float = 0.0
 var cadence: float = -1.0
 var max_speed_reached: float = 0.0
 var is_drafting: bool = false
+## Who the local rider is drafting behind (shown on the HUD).
+var drafting_behind: String = ""
 
 ## Set by MissionManager: riding only starts after the countdown.
 var can_ride: bool = false
@@ -90,14 +92,28 @@ func _simulate(delta: float) -> void:
 	distance = minf(distance + speed * delta, distance_limit)
 
 
+## Slipstream behind another rider, or behind anything in the
+## "draft_target" group (Endless Survival companions on the front).
 func _check_drafting() -> bool:
 	for other in get_parent().get_children():
 		if other == self or not other is CyclistController:
 			continue
 		var gap: float = (other as CyclistController).distance - distance
 		if gap > 1.5 and gap < draft_range_m:
+			drafting_behind = (other as CyclistController).player_name
 			return true
+	for target in get_tree().get_nodes_in_group("draft_target"):
+		var gap: float = float(target.get("distance")) - distance
+		if gap > 1.5 and gap < draft_range_m:
+			drafting_behind = String(target.get("companion_name"))
+			return true
+	drafting_behind = ""
 	return false
+
+
+## Owner only: knocked off your rhythm (a runner clawed at you).
+func stagger(speed_factor: float) -> void:
+	speed *= speed_factor
 
 
 ## Remote riders: extrapolate from the last packet and ease towards it.

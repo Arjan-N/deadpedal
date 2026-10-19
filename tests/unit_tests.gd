@@ -15,6 +15,7 @@ func _ready() -> void:
 	test_endless_route()
 	test_gate_objective()
 	test_zombie_director()
+	test_runners()
 	test_sound_bank()
 	test_high_scores()
 	await test_trainer_bridge_input()
@@ -233,6 +234,55 @@ func test_zombie_director() -> void:
 	var near := z.get_danger(z.front_distance + 5.0)
 	var far := z.get_danger(z.front_distance + 35.0)
 	check(near > far, "danger rises as the horde gets closer")
+	r.free()
+	z.free()
+
+
+func test_runners() -> void:
+	print("Runners")
+	var r := Route.new()
+	add_child(r)
+	var z := ZombieDirector.new()
+	add_child(z)
+	z.route = r
+	z.surge_interval = Vector2(1000, 1000)
+	var pace := z.pursuit_pace
+	var reached := [0]
+	z.runner_reached.connect(func(_d: float) -> void: reached[0] += 1)
+
+	# Story mode: no runners.
+	z.set_phase(ZombieDirector.Phase.PURSUIT, 200.0)
+	var rider := 200.0
+	for i in 600:
+		rider += pace * 0.1
+		z.simulate(0.1, rider, pace)
+	check(z.runners.is_empty() and reached[0] == 0, "no runners unless runner_interval is set")
+
+	# Riding at the horde's pace, a runner breaks out and reaches you.
+	z.runner_interval = Vector2(1.0, 1.0)
+	z.max_runners = 1
+	for i in 150:
+		rider += pace * 0.1
+		z.simulate(0.1, rider, pace)
+	check(reached[0] >= 1, "a runner reaches a rider riding at the horde's pace")
+
+	# Sprinting away: the runner tires and drops back into the horde.
+	z.runner_interval = Vector2(1000, 1000)
+	z.runners = [[z.front_distance + 0.5, pace, 0.0]]
+	reached[0] = 0
+	var sprint := pace + z.runner_speed_bonus + 1.0
+	for i in 150:
+		rider += sprint * 0.1
+		z.simulate(0.1, rider, sprint)
+	check(reached[0] == 0 and z.runners.is_empty(), "sprinting away from a runner works")
+
+	# Runners travel in the network snapshot.
+	z.runners = [[rider - 10.0, 13.0, 1.0]]
+	var copy := ZombieDirector.new()
+	copy.apply_snapshot(z.get_snapshot())
+	check(copy.runners.size() == 1 and absf(float(copy.runners[0][0]) - (rider - 10.0)) < 0.01, "runners are sent to other players")
+	check(absf(copy.nearest_runner_gap(rider) - 10.0) < 0.01, "distance from the nearest runner")
+	copy.free()
 	r.free()
 	z.free()
 
