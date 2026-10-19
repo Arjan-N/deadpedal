@@ -40,7 +40,7 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	# Free shared caches at shutdown so Godot doesn't report leaks.
 	MeshKit.clear_cache()
-	SfxSynth.clear_cache()
+	SoundBank.clear_cache()
 
 
 func is_host() -> bool:

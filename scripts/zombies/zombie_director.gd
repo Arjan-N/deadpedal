@@ -238,6 +238,14 @@ func is_catching(_rearmost: float = 0.0) -> bool:
 	return phase in [Phase.PURSUIT, Phase.GATE, Phase.FINAL_ESCAPE] and grab_progress >= 1.0
 
 
+## World position of a random visible zombie in the horde (for 3D sound).
+func random_horde_position() -> Vector3:
+	var visible_zombies := _horde.filter(func(z: ZombieController) -> bool: return z.visible)
+	if visible_zombies.is_empty():
+		return route.get_point(front_distance)
+	return (visible_zombies[randi() % visible_zombies.size()] as ZombieController).global_position
+
+
 # --- Network snapshot ----------------------------------------------------------
 
 func get_snapshot() -> Array:

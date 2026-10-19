@@ -81,6 +81,7 @@ func _ready() -> void:
 	camera.target = local_cyclist
 	CyclingInputManager.reset()
 	hud.setup(self)
+	audio.setup(self)
 	hud.replay_requested.connect(_on_replay_requested)
 	hud.menu_requested.connect(_on_menu_requested)
 	MultiplayerManager.player_left.connect(_on_player_left)
@@ -210,13 +211,12 @@ func _process(delta: float) -> void:
 		var beep := int(ceil(countdown_left))
 		if beep != _last_countdown_beep and beep > 0:
 			_last_countdown_beep = beep
-			audio.play("beep", -4.0)
+			audio.play("countdown_beep", -4.0)
 	_update_local_limits()
 	zombies.update_visuals(delta, get_riders())
 	var danger := get_danger()
 	camera.danger = lerpf(camera.danger, danger, clampf(delta * 2.0, 0.0, 1.0))
-	audio.update(delta, danger, local_cyclist.speed if local_cyclist else 0.0,
-		gate.team_effort_rate if stage == Stage.GATE else 0.0)
+	audio.update(delta, danger, gate.team_effort_rate if stage == Stage.GATE else 0.0)
 	if _results_timer > 0.0:
 		_results_timer -= delta
 		if _results_timer <= 0.0:
@@ -333,10 +333,10 @@ func _net_set_stage(new_stage: Stage) -> void:
 			countdown_left = countdown_seconds
 			announced.emit(mission_title, "Escape the town before the dead find you", countdown_seconds + 1.0)
 		Stage.DEPARTURE:
-			audio.play("beep_go", -2.0)
+			audio.play("go", -2.0)
 			announced.emit("GO!", "Ride out of town - stay together", 2.0)
 		Stage.PURSUIT:
-			audio.play("alarm", -6.0)
+			audio.play("horde_roar", -2.0)
 			announced.emit("THEY'VE HEARD YOU", "Keep pedalling - the horde is coming!", 3.0)
 		Stage.GATE:
 			announced.emit("LOCKED GATE", "Pedal together to wind it open!", 3.0)
@@ -376,7 +376,7 @@ func _net_results(r: Dictionary) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func _net_announce(title: String, subtitle: String, duration: float) -> void:
-	audio.play("alarm", -8.0, 1.2)
+	audio.play("horde_roar", 0.0, randf_range(0.9, 1.1))
 	announced.emit(title, subtitle, duration)
 
 
