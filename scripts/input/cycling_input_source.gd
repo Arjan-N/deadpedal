@@ -27,6 +27,17 @@ func get_cadence_rpm() -> float:
 	return -1.0
 
 
+## Current virtual gear (1..get_gear_count()), or 0 if this source has no
+## gears (e.g. no Zwift Click connected). Gears change how the trainer feels,
+## not the in-game speed - power still decides that.
+func get_gear() -> int:
+	return 0
+
+
+func get_gear_count() -> int:
+	return 0
+
+
 func has_cadence() -> bool:
 	return get_cadence_rpm() >= 0.0
 

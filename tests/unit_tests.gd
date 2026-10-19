@@ -15,6 +15,7 @@ func _ready() -> void:
 	test_gate_objective()
 	test_zombie_director()
 	test_sound_bank()
+	await test_trainer_bridge_input()
 	print("")
 	if _failures == 0:
 		print("ALL TESTS PASSED (%d checks)" % _checks)
@@ -245,3 +246,25 @@ func test_sound_bank() -> void:
 			missing.append(id)
 	check(missing.is_empty(), "all %d game sounds have recordings%s" % [ids.size(), "" if missing.is_empty() else " - missing: %s" % [missing]])
 	check(SoundBank.get_variants("groan").size() >= 4, "several groan variations (%d)" % SoundBank.get_variants("groan").size())
+
+
+func test_trainer_bridge_input() -> void:
+	print("TrainerBridgeInput")
+	var input := TrainerBridgeInput.new()
+	add_child(input)
+	check(input.is_listening(), "listens for the trainer bridge on UDP %d" % TrainerBridgeInput.PORT)
+	check(not input.is_input_valid() and input.get_gear() == 0, "no data yet: invalid, no gear")
+	var udp := PacketPeerUDP.new()
+	udp.connect_to_host("127.0.0.1", TrainerBridgeInput.PORT)
+	udp.put_packet(JSON.stringify({"power": 215.0, "cadence": 88.0, "device": "Test", "simulated": false, "gear": 9, "gears": 24}).to_utf8_buffer())
+	for i in 10:
+		await get_tree().process_frame
+	check(input.is_input_valid() and is_equal_approx(input.get_power_watts(), 215.0), "receives power from the bridge")
+	check(input.get_gear() == 9 and input.get_gear_count() == 24, "receives the virtual gear (%d/%d)" % [input.get_gear(), input.get_gear_count()])
+	check(input.get_source_type() == CyclingInputSource.SourceType.SMART_TRAINER, "real trainer data is labelled SMART_TRAINER")
+	udp.put_packet(JSON.stringify({"power": 100.0, "gear": 0, "gears": 0}).to_utf8_buffer())
+	for i in 10:
+		await get_tree().process_frame
+	check(input.get_gear() == 0, "no Click connected: no gear shown")
+	udp.close()
+	input.queue_free()

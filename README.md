@@ -92,6 +92,29 @@ needs Bluetooth (built in, or a USB Bluetooth adapter).
    when you pedal. This setting is remembered.
 5. Set your real **FTP** on the title screen so effort is scaled to you.
 
+**Virtual gears with a Zwift Click** (optional)
+
+If a Zwift Click is nearby, the bridge connects to it as well. Its buttons then
+change virtual gears, like Zwift's virtual shifting: your power still sets
+your in-game speed, but a higher gear makes the trainer heavier at the same
+cadence. The bridge does this by setting the trainer's simulated slope (FTMS),
+a little per gear (24 gears; gear 8 feels like a flat road).
+
+- **Zwift Click (original):** `+` = harder gear, `-` = easier gear.
+- **Zwift Click v2:** use the **right** puck: `+` or `Y` = harder, `B` or
+  `Z` = easier. Zwift locks the left puck to its own app, so it can't be used.
+- Press a button on the Click to wake it, and make sure it isn't connected to
+  Zwift or the Companion app.
+- The current gear shows on screen (turn this off with **Show gear on screen**
+  on the title screen). The bridge window shows it too.
+- Without a Click, the bridge never changes the trainer's resistance. When you
+  close the bridge window, it puts the trainer back on a flat road.
+- Feel of the gears: from a command prompt, `DeadPedalTrainerBridge.exe
+  -gear-step 0.5` (slope per gear, default 0.4 %), `-neutral-gear 10`,
+  `-gear-count 24`, or `-gears=false` to ignore the Click.
+- If the Click doesn't respond, double-click `Bridge with debug log.bat`,
+  press its buttons, and send the window's text to the developer.
+
 **Troubleshooting**
 - *"No trainer found"*: make sure Zwift/the companion app is closed, pedal to
   wake the trainer, and keep the PC within a few metres of it. Double-click

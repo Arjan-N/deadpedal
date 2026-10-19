@@ -141,6 +141,14 @@ func _build() -> void:
 	_input_option.item_selected.connect(_on_input_selected)
 	right.add_child(_input_option)
 	_input_status = _label(right, "", 20, COL_DIM)
+	var gear_toggle := CheckBox.new()
+	gear_toggle.text = "Show gear on screen (Zwift Click virtual shifting)"
+	gear_toggle.button_pressed = CyclingInputManager.show_gear
+	gear_toggle.add_theme_font_size_override("font_size", 20)
+	gear_toggle.toggled.connect(func(on: bool) -> void:
+		CyclingInputManager.show_gear = on
+		CyclingInputManager.save_settings())
+	right.add_child(gear_toggle)
 	_label(right, "Port", 22, COL_DIM)
 	_port_spin = SpinBox.new()
 	_port_spin.min_value = 1024
@@ -169,6 +177,8 @@ func _process(_delta: float) -> void:
 		if CyclingInputManager.is_input_valid():
 			_input_status.text = "%s:  %d W   %d rpm" % [CyclingInputManager.get_source_name(),
 				roundi(CyclingInputManager.get_power_watts()), maxi(roundi(CyclingInputManager.get_cadence_rpm()), 0)]
+			if CyclingInputManager.get_gear() > 0:
+				_input_status.text += "   gear %d/%d" % [CyclingInputManager.get_gear(), CyclingInputManager.get_gear_count()]
 			_input_status.label_settings.font_color = Color(0.45, 1.0, 0.5)
 		else:
 			_input_status.text = "No trainer data. Start DeadPedalTrainerBridge.exe\nand pedal to wake the trainer."

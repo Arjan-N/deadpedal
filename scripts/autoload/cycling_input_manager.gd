@@ -18,6 +18,8 @@ enum InputMode { KEYBOARD, TRAINER }
 var rider_name: String = "Rider"
 ## Which input to use; saved with the rider settings.
 var input_mode: InputMode = InputMode.KEYBOARD
+## Show the virtual gear on the HUD (when a Zwift Click is in use).
+var show_gear: bool = true
 var rider_ftp_watts: float = 200.0:
 	set(value):
 		rider_ftp_watts = clampf(value, 50.0, 600.0)
@@ -67,6 +69,15 @@ func get_cadence_rpm() -> float:
 	return source.get_cadence_rpm() if source else -1.0
 
 
+## Current virtual gear, or 0 when there are no gears (see CyclingInputSource).
+func get_gear() -> int:
+	return source.get_gear() if source else 0
+
+
+func get_gear_count() -> int:
+	return source.get_gear_count() if source else 0
+
+
 func has_cadence() -> bool:
 	return source != null and source.has_cadence()
 
@@ -93,6 +104,7 @@ func save_settings() -> void:
 	cfg.set_value("rider", "name", rider_name)
 	cfg.set_value("rider", "ftp_watts", rider_ftp_watts)
 	cfg.set_value("rider", "input_mode", input_mode)
+	cfg.set_value("display", "show_gear", show_gear)
 	cfg.save(SETTINGS_PATH)
 
 
@@ -102,6 +114,7 @@ func _load_settings() -> void:
 		rider_name = str(cfg.get_value("rider", "name", rider_name))
 		rider_ftp_watts = float(cfg.get_value("rider", "ftp_watts", rider_ftp_watts))
 		input_mode = int(cfg.get_value("rider", "input_mode", input_mode)) as InputMode
+		show_gear = bool(cfg.get_value("display", "show_gear", show_gear))
 
 
 func _apply_ftp() -> void:

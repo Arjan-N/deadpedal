@@ -32,6 +32,9 @@ var _effort_bar: ProgressBar
 var _effort_label: Label
 var _cadence: Label
 var _draft: Label
+var _gear_label: Label
+var _last_gear: int = 0
+var _gear_flash: float = 0.0
 var _danger_bar: ProgressBar
 var _danger_gap: Label
 var _danger_status: Label
@@ -198,6 +201,7 @@ func _build() -> void:
 	_effort_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_cadence = _label(effort_row, "", 22, COL_DIM, HORIZONTAL_ALIGNMENT_RIGHT)
 	_draft = _label(rv, "", 22, Color(0.5, 0.85, 1.0))
+	_gear_label = _label(rv, "", 34, COL_TEXT)
 
 	# Bottom-right: danger.
 	var danger := _panel(root)
@@ -330,6 +334,7 @@ func _process(delta: float) -> void:
 	_effort_label.text = "EFFORT %d%%" % roundi(me.effort * 100.0)
 	_cadence.text = "%d rpm" % roundi(me.cadence) if me.cadence >= 0.0 else ""
 	_draft.text = "SLIPSTREAM +%d%%" % roundi(me.ride_model.draft_bonus * 100.0) if me.is_drafting else ""
+	_update_gear(delta)
 	var effort_fill := (_effort_bar.get_theme_stylebox("fill") as StyleBoxFlat)
 	effort_fill.bg_color = Color(0.3, 0.8, 1.0).lerp(Color(1.0, 0.35, 0.1), me.effort)
 
@@ -439,6 +444,23 @@ func _update_mirror(danger: float) -> void:
 	_mirror_style.border_color = COL_DANGER if flash else Color(0.25, 0.25, 0.25)
 
 
+## Virtual gear from a Zwift Click (optional, see the title screen setting).
+## Briefly highlights when you shift.
+func _update_gear(delta: float) -> void:
+	var gear := CyclingInputManager.get_gear()
+	var visible_gear := CyclingInputManager.show_gear and gear > 0
+	_gear_label.visible = visible_gear
+	if not visible_gear:
+		_last_gear = gear
+		return
+	if gear != _last_gear:
+		_gear_flash = 0.6
+		_last_gear = gear
+	_gear_flash = maxf(_gear_flash - delta, 0.0)
+	_gear_label.text = "GEAR %d / %d" % [gear, CyclingInputManager.get_gear_count()]
+	_gear_label.label_settings.font_color = COL_TEXT.lerp(COL_WARN, _gear_flash / 0.6)
+
+
 func _update_team() -> void:
 	if not _team_panel.visible:
 		return
@@ -459,7 +481,7 @@ func _update_team() -> void:
 func _update_dev() -> void:
 	if not _dev_panel.visible:
 		return
-	var text := "INPUT: %s" % CyclingInputManager.get_source_name()
+	var text := "INPUT:\n%s" % CyclingInputManager.get_source_name()
 	var src := CyclingInputManager.source
 	if src is SimulatedCyclingInput:
 		var sim := src as SimulatedCyclingInput

@@ -4,7 +4,8 @@ extends CyclingInputSource
 ## trainer bridge (DeadPedalTrainerBridge.exe, source in tools/trainer_bridge).
 ## The bridge talks Bluetooth to the
 ## trainer and sends small JSON packets to this computer over UDP:
-##   {"power": 212.0, "cadence": 88.0, "device": "Zwift Hub", "simulated": false}
+##   {"power": 212.0, "cadence": 88.0, "device": "Zwift Hub", "simulated": false,
+##    "gear": 9, "gears": 24}   (gears = 0 when no Zwift Click is connected)
 ## Godot has no built-in Bluetooth, which is why the bridge exists.
 
 const PORT := 47800
@@ -16,6 +17,8 @@ var _power: float = 0.0
 var _cadence: float = -1.0
 var _device: String = ""
 var _simulated: bool = false
+var _gear: int = 0
+var _gears: int = 0
 var _last_packet_time: float = -INF
 var _bound := false
 
@@ -37,6 +40,8 @@ func _process(_delta: float) -> void:
 		if data is Dictionary:
 			_power = maxf(float(data.get("power", 0.0)), 0.0)
 			_cadence = float(data.get("cadence", -1.0))
+			_gear = int(data.get("gear", 0))
+			_gears = int(data.get("gears", 0))
 			_device = str(data.get("device", "trainer"))
 			_simulated = bool(data.get("simulated", false))
 			_last_packet_time = Time.get_ticks_msec() / 1000.0
@@ -48,6 +53,14 @@ func get_power_watts() -> float:
 
 func get_cadence_rpm() -> float:
 	return _cadence if is_input_valid() else -1.0
+
+
+func get_gear() -> int:
+	return _gear if is_input_valid() else 0
+
+
+func get_gear_count() -> int:
+	return _gears if is_input_valid() else 0
 
 
 func is_input_valid() -> bool:
