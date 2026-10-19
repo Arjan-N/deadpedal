@@ -247,9 +247,8 @@ when launching from a terminal.
 
 ## 6. Known limitations
 
-- The trainer bridge's Bluetooth connection hasn't been tested with real
-  hardware yet. The data parsing is unit-tested against the Bluetooth spec, and
-  bridge → game was tested end to end in simulate mode.
+- The trainer bridge has been confirmed working with a **Zwift Hub One** on
+  Windows. Other FTMS / Cycling Power trainers should work but are untested.
 - ANT+ (USB stick) isn't supported, only Bluetooth.
 - Internet play is untested. LAN and same-machine play were tested.
 - Players can't join a mission already in progress; join in the lobby.
