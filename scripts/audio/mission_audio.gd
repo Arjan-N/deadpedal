@@ -23,6 +23,7 @@ var _groan_players: Array[AudioStreamPlayer3D] = []
 var _groan_timer: float = 2.0
 var _heart_timer: float = 0.0
 var _ratchet_timer: float = 0.0
+var _warned: Dictionary = {}
 
 
 func setup(p_mission: MissionManager) -> void:
@@ -140,7 +141,11 @@ func _make_loop(id: String) -> AudioStreamPlayer:
 
 
 func _stream(id: String) -> AudioStream:
-	return SoundBank.pick(id)
+	var stream := SoundBank.pick(id)
+	if stream == null and not _warned.has(id):
+		_warned[id] = true
+		push_warning("MissionAudio: no recording found for sound '%s' in res://audio/" % id)
+	return stream
 
 
 static func _enable_looping(stream: AudioStream) -> void:

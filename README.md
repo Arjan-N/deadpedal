@@ -191,7 +191,9 @@ scripts/
     town_builder.gd              Procedural road, buildings, props, lights
     prop_factory.gd, mesh_kit.gd Placeholder models from primitive shapes
   ui/hud_controller.gd, route_progress_bar.gd, main_menu.gd
-  audio/sfx_synth.gd, mission_audio.gd   Procedural placeholder sound
+  audio/sound_bank.gd, mission_audio.gd  Recorded sounds by name; mission mix
+audio/                           Sound files + CREDITS.md (licences)
+tools/audio/build_sounds.py      How each sound was cut from its source
 shaders/                         Road, facade, ground, danger vignette
 tests/unit_tests.tscn            Automated checks
 ```
@@ -252,5 +254,6 @@ when launching from a terminal.
 - ANT+ (USB stick) isn't supported, only Bluetooth.
 - Internet play is untested. LAN and same-machine play were tested.
 - Players can't join a mission already in progress; join in the lobby.
-- Placeholder visuals and procedural sounds throughout.
+- Placeholder visuals throughout. Sounds are real recordings from Freesound
+  (see `audio/CREDITS.md`; one requires attribution).
 - Zombies along the roadside are scenery. Only the horde can catch you.

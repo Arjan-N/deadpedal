@@ -14,6 +14,7 @@ func _ready() -> void:
 	test_route()
 	test_gate_objective()
 	test_zombie_director()
+	test_sound_bank()
 	print("")
 	if _failures == 0:
 		print("ALL TESTS PASSED (%d checks)" % _checks)
@@ -231,3 +232,16 @@ func test_zombie_director() -> void:
 	check(near > far, "danger rises as the horde gets closer")
 	r.free()
 	z.free()
+
+
+func test_sound_bank() -> void:
+	print("SoundBank")
+	# Every sound id the game plays must have at least one recording.
+	var ids := ["wind_loop", "tyre_loop", "drivetrain_loop", "freewheel_loop", "horde_loop", "ambience_loop",
+		"groan", "heartbeat", "gate_ratchet", "gate_open", "countdown_beep", "go", "horde_roar", "success", "failure"]
+	var missing := []
+	for id: String in ids:
+		if SoundBank.get_variants(id).is_empty():
+			missing.append(id)
+	check(missing.is_empty(), "all %d game sounds have recordings%s" % [ids.size(), "" if missing.is_empty() else " - missing: %s" % [missing]])
+	check(SoundBank.get_variants("groan").size() >= 4, "several groan variations (%d)" % SoundBank.get_variants("groan").size())
