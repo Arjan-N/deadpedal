@@ -5,3 +5,4 @@
 # Test output
 /tests/output/
 /build/
+/tools/trainer_bridge/*.exe

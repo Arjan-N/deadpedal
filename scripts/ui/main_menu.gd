@@ -171,7 +171,7 @@ func _process(_delta: float) -> void:
 				roundi(CyclingInputManager.get_power_watts()), maxi(roundi(CyclingInputManager.get_cadence_rpm()), 0)]
 			_input_status.label_settings.font_color = Color(0.45, 1.0, 0.5)
 		else:
-			_input_status.text = "No trainer data. Run tools/trainer_bridge/start_bridge.bat\nand pedal to wake the trainer."
+			_input_status.text = "No trainer data. Start DeadPedalTrainerBridge.exe\nand pedal to wake the trainer."
 			_input_status.label_settings.font_color = Color(1.0, 0.6, 0.3)
 	else:
 		_input_status.text = "Keys: 1-5 effort, W push, Space sprint (see below)"

@@ -1,7 +1,8 @@
 class_name TrainerBridgeInput
 extends CyclingInputSource
 ## Real smart-trainer input (e.g. Zwift Hub One), received from the DEAD PEDAL
-## trainer bridge (tools/trainer_bridge). The bridge talks Bluetooth to the
+## trainer bridge (DeadPedalTrainerBridge.exe, source in tools/trainer_bridge).
+## The bridge talks Bluetooth to the
 ## trainer and sends small JSON packets to this computer over UDP:
 ##   {"power": 212.0, "cadence": 88.0, "device": "Zwift Hub", "simulated": false}
 ## Godot has no built-in Bluetooth, which is why the bridge exists.

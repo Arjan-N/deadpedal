@@ -76,18 +76,17 @@ to the game. It works with any trainer that broadcasts the standard Bluetooth
 **FTMS** or **Cycling Power** profile: Zwift Hub One/Hub, Wahoo KICKR, Tacx,
 Elite, JetBlack and others. It only *reads* data and never changes resistance.
 
-**One-time setup (Windows):**
-1. Install **Python 3** from <https://www.python.org/downloads/>. On the first
-   installer screen, tick **"Add python.exe to PATH"**.
-2. Your PC needs Bluetooth (built in, or a USB Bluetooth adapter).
+The bridge is a single Windows program, `DeadPedalTrainerBridge.exe`, included
+in the Windows download next to the game. There's nothing to install. Your PC
+needs Bluetooth (built in, or a USB Bluetooth adapter).
 
 **Every ride:**
 1. **Close Zwift** and any other app connected to the trainer. Most trainers
    accept only one Bluetooth connection for this data.
 2. Pedal a few strokes to wake the trainer up.
-3. Double-click `tools/trainer_bridge/start_bridge.bat`. The first run installs
-   the Bluetooth library (needs internet, about a minute). The window then shows
-   your live watts. **Leave it open while you ride.**
+3. Double-click `DeadPedalTrainerBridge.exe`. When it connects, the window
+   shows your live watts. **Leave it open while you ride.** (Windows may warn
+   about an unknown publisher the first time: **More info → Run anyway**.)
 4. Start the game. On the title screen, set **Cycling input** to **Smart
    trainer**. The status line below it shows your live power; check it moves
    when you pedal. This setting is remembered.
@@ -95,13 +94,20 @@ Elite, JetBlack and others. It only *reads* data and never changes resistance.
 
 **Troubleshooting**
 - *"No trainer found"*: make sure Zwift/the companion app is closed, pedal to
-  wake the trainer, and keep the PC within a few metres of it. Run
-  `start_bridge.bat --list` to see what the bridge can find.
-- *Several trainers nearby*: `start_bridge.bat --name "Zwift"` picks by name.
+  wake the trainer, and keep the PC within a few metres of it. Double-click
+  `Find trainers.bat` to see what the bridge can find.
+- *Several trainers nearby*: run `DeadPedalTrainerBridge.exe -name "Zwift"`
+  from a command prompt to pick by name.
 - *"TRAINER SIGNAL LOST"* in game: the bridge window closed or lost the
   trainer. It reconnects automatically.
-- *Testing without a trainer*: `start_bridge.bat --simulate` sends fake data,
+- *Testing without a trainer*: `Test without trainer.bat` sends fake data,
   which the game clearly labels as **SIMULATED**.
+
+**Building the bridge** (only needed if you change it): it's written in Go
+(`tools/trainer_bridge`, using the `tinygo.org/x/bluetooth` library). With Go
+installed: `cd tools/trainer_bridge` then
+`GOOS=windows GOARCH=amd64 go build -o DeadPedalTrainerBridge.exe .`
+(in Windows PowerShell: `$env:GOOS="windows"; go build -o DeadPedalTrainerBridge.exe .`).
 - Multiplayer: each rider runs the bridge on their own PC. Two copies of the
   game on **one** PC can't both use a trainer.
 
@@ -205,7 +211,7 @@ tests/unit_tests.tscn            Automated checks
 Every input is a `CyclingInputSource` (`scripts/input/`): keyboard
 simulation, scripted test input, and `TrainerBridgeInput`, which receives
 `{"power", "cadence", "device", "simulated"}` JSON packets on UDP
-127.0.0.1:47800 from `tools/trainer_bridge/trainer_bridge.py`. To support
+127.0.0.1:47800 from the trainer bridge (`tools/trainer_bridge`). To support
 another kind of device (e.g. ANT+ FE-C), either extend the bridge or add a new
 `CyclingInputSource` subclass. Movement, zombies, missions and networking
 don't need to change.
@@ -244,7 +250,6 @@ when launching from a terminal.
 - The trainer bridge's Bluetooth connection hasn't been tested with real
   hardware yet. The data parsing is unit-tested against the Bluetooth spec, and
   bridge → game was tested end to end in simulate mode.
-- The trainer bridge needs Python installed; it isn't a one-click .exe yet.
 - ANT+ (USB stick) isn't supported, only Bluetooth.
 - Internet play is untested. LAN and same-machine play were tested.
 - Players can't join a mission already in progress; join in the lobby.

@@ -44,12 +44,15 @@ else
 	result "multiplayer: identical mission state on both machines" 0 1
 fi
 
-# Trainer bridge: Bluetooth parsing unit tests, then bridge (simulate mode)
-# -> UDP -> game, riding a full mission.
-if command -v python3 > /dev/null; then
-	(cd tools/trainer_bridge && python3 -m unittest -q test_trainer_bridge > "../../$LOG_DIR/bridge_unit.log" 2>&1)
+# Trainer bridge (Go): Bluetooth parsing unit tests, Windows build, then
+# bridge (simulate mode) -> UDP -> game, riding a full mission.
+if command -v go > /dev/null; then
+	(cd tools/trainer_bridge && go test ./... > "../../$LOG_DIR/bridge_unit.log" 2>&1)
 	result "trainer bridge: Bluetooth data parsing" 0 $?
-	python3 tools/trainer_bridge/trainer_bridge.py --simulate > "$LOG_DIR/bridge.log" 2>&1 &
+	(cd tools/trainer_bridge && GOOS=windows GOARCH=amd64 go build -o DeadPedalTrainerBridge.exe . > "../../$LOG_DIR/bridge_build.log" 2>&1)
+	result "trainer bridge: Windows .exe builds" 0 $?
+	(cd tools/trainer_bridge && go build -o "../../$LOG_DIR/bridge" .)
+	"$LOG_DIR/bridge" -simulate < /dev/null > "$LOG_DIR/bridge.log" 2>&1 &
 	BRIDGE_PID=$!
 	sleep 1
 	"$GODOT" --headless --path . -- --solo --input=trainer --timescale=4 --exit-on-results --quit-after=150 > "$LOG_DIR/bridge_game.log" 2>&1
