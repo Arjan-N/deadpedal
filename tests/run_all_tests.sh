@@ -29,7 +29,7 @@ result "solo: replay restarts the mission" 2 $?
 
 # Endless Survival: a rider who picks up survivors loses one to the horde
 # before being caught; the world seed is fixed so the run is repeatable.
-"$GODOT" --headless --path . -- --solo --mode=endless --seed=42 --autopilot=125 --autopilot-pickup --timescale=10 --exit-on-results --quit-after=150 > "$LOG_DIR/endless_solo.log" 2>&1
+"$GODOT" --headless --path . -- --solo --mode=endless --seed=42 --autopilot=155 --autopilot-pickup --timescale=10 --exit-on-results --quit-after=150 > "$LOG_DIR/endless_solo.log" 2>&1
 CODE=$?
 if [ "$CODE" = 2 ] && grep -q "Picked up" "$LOG_DIR/endless_solo.log" && grep -q "taken by the horde" "$LOG_DIR/endless_solo.log"; then
 	result "endless: survivors picked up, one taken by the horde, then caught" 0 0

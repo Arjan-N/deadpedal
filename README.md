@@ -294,7 +294,7 @@ godot --headless --path . -- --join=127.0.0.1 --ftp=150 --autopilot=150 --timesc
 
 # Endless Survival with a fixed world; the autopilot slows down for survivors.
 # Watch the log for "Picked up", "taken by the horde" and "Checkpoint" lines.
-godot --headless --path . -- --solo --mode=endless --seed=42 --autopilot=125 --autopilot-pickup --timescale=8 --exit-on-results
+godot --headless --path . -- --solo --mode=endless --seed=42 --autopilot=155 --autopilot-pickup --timescale=10 --exit-on-results
 ```
 
 `tests/run_all_tests.sh` runs all of the above. Other options are listed at the
