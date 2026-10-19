@@ -16,6 +16,7 @@ var _lobby_box: VBoxContainer
 var _lobby_status: Label
 var _lobby_players: Label
 var _lobby_start: Button
+var _lobby_start_endless: Button
 var _message: Label
 
 
@@ -85,7 +86,11 @@ func _build() -> void:
 	_main_box = VBoxContainer.new()
 	_main_box.add_theme_constant_override("separation", 14)
 	left.add_child(_main_box)
-	_button(_main_box, "START MISSION (solo)", _on_solo)
+	_button(_main_box, "STORY: ESCAPE THE TOWN", _on_solo)
+	_button(_main_box, "ENDLESS SURVIVAL", _on_solo_endless)
+	var best := HighScores.best()
+	if not best.is_empty():
+		_label(_main_box, "   Best endless run: %.2f km  (score %d)" % [float(best["distance"]) / 1000.0, int(best["score"])], 20, COL_DIM)
 	_button(_main_box, "HOST GAME", _on_host)
 	var join_row := HBoxContainer.new()
 	_main_box.add_child(join_row)
@@ -105,7 +110,8 @@ func _build() -> void:
 	_label(_lobby_box, "LOBBY", 40, COL_TEXT)
 	_lobby_status = _label(_lobby_box, "", 22, COL_DIM)
 	_lobby_players = _label(_lobby_box, "", 28, COL_TEXT)
-	_lobby_start = _button(_lobby_box, "START MISSION", func() -> void: MultiplayerManager.start_mission())
+	_lobby_start = _button(_lobby_box, "START: ESCAPE THE TOWN", func() -> void: MultiplayerManager.start_mission(MultiplayerManager.MODE_STORY))
+	_lobby_start_endless = _button(_lobby_box, "START: ENDLESS SURVIVAL", func() -> void: MultiplayerManager.start_mission(MultiplayerManager.MODE_ENDLESS))
 	_button(_lobby_box, "LEAVE", _on_leave)
 
 	_message = _label(left, "", 24, Color(1.0, 0.6, 0.3))
@@ -201,7 +207,12 @@ func _save_profile() -> void:
 
 func _on_solo() -> void:
 	_save_profile()
-	MultiplayerManager.start_solo()
+	MultiplayerManager.start_solo(MultiplayerManager.MODE_STORY)
+
+
+func _on_solo_endless() -> void:
+	_save_profile()
+	MultiplayerManager.start_solo(MultiplayerManager.MODE_ENDLESS)
 
 
 func _on_host() -> void:
@@ -247,6 +258,7 @@ func _show_lobby(status: String) -> void:
 	_lobby_box.visible = true
 	_lobby_status.text = status
 	_lobby_start.visible = MultiplayerManager.is_host()
+	_lobby_start_endless.visible = MultiplayerManager.is_host()
 	_message.text = ""
 	_refresh_lobby()
 

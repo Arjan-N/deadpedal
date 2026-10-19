@@ -61,6 +61,17 @@ func add_effort(efforts: Dictionary, delta: float, rider_count: int) -> void:
 	progress = clampf(progress + team_effort_rate * delta / target, 0.0, 1.0)
 
 
+## Endless mode: reuse this gate at the next checkpoint, closed again.
+func reset_at(frame: Transform3D, distance: float) -> void:
+	transform = frame
+	distance_on_route = distance
+	progress = 0.0
+	is_open = false
+	contributions.clear()
+	team_effort_rate = 0.0
+	_open_amount = 0.0
+
+
 func open_gate() -> void:
 	if is_open:
 		return

@@ -9,6 +9,8 @@ extends Node
 ##
 ## Options:
 ##   --solo                 skip the menu and start a solo mission
+##   --mode=endless         with --solo / --host: Endless Survival
+##   --seed=N               fixed world seed (endless mode)
 ##   --host                 host a game; --auto-start=N starts at N players
 ##   --join=IP              join a game at IP
 ##   --port=N               network port (default 7777)
@@ -18,6 +20,8 @@ extends Node
 ##   --autopilot-profile=T:W,T:W,...   watts changing at times T (seconds)
 ##   --autopilot-react=W    with --autopilot: ride at W watts while the horde
 ##                          surges or grabs (simulates a player who sprints)
+##   --autopilot-pickup     with --autopilot (endless mode): stop pedalling
+##                          before waiting survivors so they get picked up
 ##   --log-horde            print the horde gap every 2 s (balance tuning)
 ##   --timescale=F          speed the game up (testing)
 ##   --screenshot=PATH      save screenshots; with --screenshot-at=S1,S2,...
@@ -75,7 +79,7 @@ func _ready() -> void:
 func _start_mode() -> void:
 	var port := int(options.get("port", str(MultiplayerManager.DEFAULT_PORT)))
 	if options.has("solo"):
-		MultiplayerManager.start_solo()
+		MultiplayerManager.start_solo(options.get("mode", MultiplayerManager.MODE_STORY))
 	elif options.has("host"):
 		MultiplayerManager.host_game(port)
 		_auto_start_players = int(options.get("auto-start", "0"))
@@ -94,7 +98,7 @@ func _process(delta: float) -> void:
 	if _auto_start_players > 0 and MultiplayerManager.players.size() >= _auto_start_players:
 		_auto_start_players = 0
 		print("[DevTools] auto-starting with %d players" % MultiplayerManager.players.size())
-		MultiplayerManager.start_mission.call_deferred()
+		MultiplayerManager.start_mission.call_deferred(options.get("mode", MultiplayerManager.MODE_STORY))
 
 	var mission := get_tree().get_first_node_in_group("mission") as MissionManager
 	if mission == null:
@@ -112,9 +116,16 @@ func _process(delta: float) -> void:
 		print("[Horde] t=%5.1f stage=%s gap=%5.1f target=%5.1f speed=%4.1f surge=%s grab=%.2f" % [mission.elapsed,
 			MissionManager.STAGE_NAMES[mission.stage], mission.get_horde_gap(), z.get_target_gap(mission.get_rearmost_speed()),
 			mission.get_rearmost_speed(), z.surging, z.grab_progress])
-	if options.has("autopilot-react") and CyclingInputManager.source is ScriptedCyclingInput:
-		var react := mission.zombies.surging or mission.zombies.is_grabbing()
-		(CyclingInputManager.source as ScriptedCyclingInput).constant_watts = float(options["autopilot-react"] if react else options.get("autopilot", "200"))
+	if CyclingInputManager.source is ScriptedCyclingInput and (options.has("autopilot-react") or options.has("autopilot-pickup")):
+		var watts := float(options.get("autopilot", "200"))
+		if options.has("autopilot-react") and (mission.zombies.surging or mission.zombies.is_grabbing()):
+			watts = float(options["autopilot-react"])
+		elif options.has("autopilot-pickup") and mission is EndlessMission and mission.local_cyclist:
+			var ahead := (mission as EndlessMission).distance_to_next_survivor(mission.local_cyclist.distance)
+			if ahead >= 0.0 and ahead < 70.0:
+				# Ease off and keep rolling past the survivor at ~15 km/h.
+				watts = 0.0 if mission.local_cyclist.speed > 4.0 else 30.0
+		(CyclingInputManager.source as ScriptedCyclingInput).constant_watts = watts
 	if options.has("screenshot") and _shot_index < _shots.size() and _mission_time >= _shots[_shot_index]:
 		var path := String(options["screenshot"])
 		if path.contains("%d"):
@@ -133,7 +144,7 @@ func _on_mission_finished(results: Dictionary) -> void:
 		print("[DevTools] RESULT #%d success=%s time=%.1f - replaying" % [_results_seen, results.get("success"), results.get("time", 0.0)])
 		if MultiplayerManager.is_host():
 			await get_tree().create_timer(1.0 * Engine.time_scale).timeout
-			MultiplayerManager.start_mission()
+			MultiplayerManager.start_mission(MultiplayerManager.mission_mode)
 		return
 	_exit_pending = true
 	print("[DevTools] RESULT success=%s time=%.1f gate=%.0f%% my_distance=%.0f my_max_speed=%.1f riders=%d" % [

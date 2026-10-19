@@ -109,20 +109,36 @@ func setup(p_route: Route, wanderers_from: float, wanderers_to: float) -> void:
 		_horde.append(z)
 		# Packed near the front, stragglers further back.
 		_horde_offsets.append(Vector2(pow(vis_rng.randf(), 1.6) * 24.0, vis_rng.randf_range(-4.2, 4.2)))
-	var d := wanderers_from
+	spawn_wanderers(wanderers_from, wanderers_to, random_seed)
+
+
+## Places roadside zombies along a stretch of road (deterministic per seed).
+func spawn_wanderers(from_d: float, to_d: float, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var d := from_d + rng.randf_range(0.0, wanderer_spacing.x)
 	var n := 0
-	while d < wanderers_to:
-		var side := -1.0 if vis_rng.randf() < 0.5 else 1.0
+	while d < to_d:
+		var side := -1.0 if rng.randf() < 0.5 else 1.0
 		var z: ZombieController = ZOMBIE_SCENE.instantiate()
-		z.setup(random_seed + 1000 + n, ZombieController.Behaviour.WANDERER)
+		z.setup(seed_value + 1000 + n, ZombieController.Behaviour.WANDERER)
 		add_child(z)
-		var lateral := side * vis_rng.randf_range(6.5, 12.0)
+		var lateral := side * rng.randf_range(6.5, 12.0)
 		z.global_position = route.get_point(d, lateral)
-		z.rotation.y = vis_rng.randf() * TAU
+		z.rotation.y = rng.randf() * TAU
 		_wanderers.append(z)
 		_wanderer_info.append(Vector2(d, side))
-		d += vis_rng.randf_range(wanderer_spacing.x, wanderer_spacing.y)
+		d += rng.randf_range(wanderer_spacing.x, wanderer_spacing.y)
 		n += 1
+
+
+## Removes roadside zombies placed before this distance (endless mode).
+func despawn_wanderers_before(distance: float) -> void:
+	for i in range(_wanderers.size() - 1, -1, -1):
+		if _wanderer_info[i].x < distance:
+			_wanderers[i].queue_free()
+			_wanderers.remove_at(i)
+			_wanderer_info.remove_at(i)
 
 
 # --- Host-side simulation ----------------------------------------------------
@@ -142,11 +158,16 @@ func set_phase(new_phase: Phase, rearmost: float, hold_point: float = 0.0) -> vo
 			_gate_speed = clampf(to_cover / gate_arrival_time, gate_speed_range.x, gate_speed_range.y)
 		Phase.FINAL_ESCAPE:
 			_schedule_surge()
-			# Opening the gate in the nick of time is a save: the swinging gate
-			# shakes off any zombies grabbing the rearmost rider.
-			grab_progress = 0.0
-			front_distance = minf(front_distance, rearmost - 8.0)
+			# Opening the gate in the nick of time is a save.
+			shake_off(rearmost, 8.0)
 	phase = new_phase
+
+
+## Host only: the zombies let go and fall back to at least `gap` metres
+## (e.g. a gate swinging open knocks them back).
+func shake_off(rearmost: float, gap: float) -> void:
+	grab_progress = 0.0
+	front_distance = minf(front_distance, rearmost - gap)
 
 
 ## Host only: advance the horde. `rearmost` / `rear_speed` = distance and

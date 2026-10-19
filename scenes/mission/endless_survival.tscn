@@ -1,0 +1,85 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/mission/endless_mission.gd" id="1_mission"]
+[ext_resource type="Script" path="res://scripts/world/endless_route.gd" id="2_route"]
+[ext_resource type="Script" path="res://scripts/world/town_builder.gd" id="3_town"]
+[ext_resource type="Script" path="res://scripts/zombies/zombie_director.gd" id="4_zombies"]
+[ext_resource type="Script" path="res://scripts/mission/gate_objective.gd" id="5_gate"]
+[ext_resource type="Script" path="res://scripts/camera/camera_controller.gd" id="7_camera"]
+[ext_resource type="Script" path="res://scripts/ui/hud_controller.gd" id="8_hud"]
+[ext_resource type="Script" path="res://scripts/audio/mission_audio.gd" id="9_audio"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sky"]
+sky_top_color = Color(0.2, 0.22, 0.24, 1)
+sky_horizon_color = Color(0.42, 0.43, 0.42, 1)
+sky_curve = 0.12
+ground_bottom_color = Color(0.08, 0.08, 0.08, 1)
+ground_horizon_color = Color(0.38, 0.39, 0.38, 1)
+sun_angle_max = 1.0
+sky_energy_multiplier = 1.0
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("ProceduralSkyMaterial_sky")
+
+[sub_resource type="Environment" id="Environment_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 3
+ambient_light_color = Color(0.4, 0.43, 0.45, 1)
+ambient_light_sky_contribution = 0.8
+ambient_light_energy = 1.3
+tonemap_mode = 3
+tonemap_white = 6.0
+ssao_enabled = true
+glow_enabled = true
+glow_intensity = 0.9
+glow_bloom = 0.05
+fog_enabled = true
+fog_light_color = Color(0.36, 0.39, 0.39, 1)
+fog_density = 0.011
+fog_sky_affect = 0.75
+fog_aerial_perspective = 0.25
+adjustment_enabled = true
+adjustment_contrast = 1.08
+adjustment_saturation = 0.72
+
+[node name="Mission" type="Node3D"]
+script = ExtResource("1_mission")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.8192, 0, -0.5736, -0.329, 0.8192, -0.4698, 0.4698, 0.5736, 0.671, 0, 30, 0)
+light_color = Color(0.78, 0.82, 0.86, 1)
+light_energy = 1.1
+shadow_enabled = true
+shadow_normal_bias = 2.5
+directional_shadow_max_distance = 120.0
+
+[node name="Route" type="Path3D" parent="."]
+script = ExtResource("2_route")
+
+[node name="Town" type="Node3D" parent="."]
+script = ExtResource("3_town")
+
+[node name="Zombies" type="Node3D" parent="."]
+script = ExtResource("4_zombies")
+
+[node name="Gate" type="Node3D" parent="."]
+script = ExtResource("5_gate")
+
+[node name="Cyclists" type="Node3D" parent="."]
+
+[node name="Camera" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 8)
+current = true
+fov = 68.0
+far = 600.0
+script = ExtResource("7_camera")
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("8_hud")
+
+[node name="Audio" type="Node" parent="."]
+script = ExtResource("9_audio")

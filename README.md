@@ -4,8 +4,9 @@ A cooperative zombie-survival cycling game prototype. Your pedalling is the
 controller: keep your speed up, stay together, and escape the town before the
 horde catches the group.
 
-**Status:** first playable prototype. One mission (*Escape the Town*),
-single-player and 2–6 player LAN/host-and-join multiplayer. Ride with a
+**Status:** playable prototype. Two modes: the story mission *Escape the
+Town* and **Endless Survival**, both single-player or 2–6 player
+LAN/host-and-join multiplayer. Ride with a
 **Bluetooth smart trainer** (e.g. Zwift Hub One) through the included trainer
 bridge, or with the **keyboard simulation** for development.
 
@@ -67,6 +68,24 @@ sprint free before the group is lost. The group is only as safe as its slowest
 member.
 
 ---
+
+### Endless Survival
+
+A road that never ends, through changing areas: the old town, the outskirts,
+forest and open farmland. Ride as far as you can.
+
+- **The horde gets faster** the further you go, and surges more often. Every
+  run ends eventually; stronger, smarter riding lasts longer.
+- **Checkpoint gates** every 2 km: pedal together to wind them open. Each one
+  needs a bit more effort than the last.
+- **Survivors** wait by the road, waving a red flare (green marks on the
+  progress bar). **Slow to 20 km/h** as you pass to pick one up (up to 3). They
+  ride at the back of the group and help wind the gates. When the horde grabs
+  you, a survivor is taken instead, and the horde stops to feed. Sprint during
+  the grab and you can save them too.
+- **Score** = metres ridden + 500 per checkpoint + 250 per survivor rescued.
+  The best 10 runs are saved on your PC; your best shows on the title screen.
+- Every run has a new random world. In multiplayer, everyone gets the same one.
 
 ## 1b. Riding with a smart trainer (Zwift Hub One and others)
 
@@ -185,7 +204,8 @@ behave like a LAN). This prototype has no matchmaking or relay server.
 project.godot
 scenes/
   ui/main_menu.tscn              Title screen + lobby
-  mission/escape_the_town.tscn   The mission (open this to tweak the level)
+  mission/escape_the_town.tscn   The story mission (open this to tweak the level)
+  mission/endless_survival.tscn  Endless Survival
   cyclist/cyclist.tscn           One rider (tune the RideModel here)
   zombies/zombie.tscn            One zombie
 scripts/
@@ -206,12 +226,17 @@ scripts/
     zombie_director.gd           The horde threat (host-simulated) + all zombies
     zombie_controller.gd         One zombie: model, shamble, behaviours
   mission/
-    mission_manager.gd           Stages, rules, authority, results
+    mission_manager.gd           Stages, rules, authority, results (+ mode hooks)
+    endless_mission.gd           Endless Survival: checkpoints, difficulty, survivors
+    survivor.gd, companion.gd    Survivors by the road / riding with the group
+    high_scores.gd               Endless high-score table (saved locally)
     gate_objective.gd            Cooperative gate (team effort)
     extraction_zone.gd           Safe zone visuals
   world/
     route.gd                     The road path; everything moves by distance along it
-    town_builder.gd              Procedural road, buildings, props, lights
+    endless_route.gd             Never-ending road generated from a seed
+    town_builder.gd              Procedural road, buildings, props, lights;
+                                 streams 200 m chunks in endless mode
     prop_factory.gd, mesh_kit.gd Placeholder models from primitive shapes
   ui/hud_controller.gd, route_progress_bar.gd, main_menu.gd
   audio/sound_bank.gd, mission_audio.gd  Recorded sounds by name; mission mix
@@ -230,6 +255,10 @@ tests/unit_tests.tscn            Automated checks
 - **Speed feel:** open `cyclist.tscn`, select the root, expand **Ride Model**.
 - **Camera:** the `Camera` node.
 - **Road shape:** the `Route` node's **Control Points**.
+- **Endless mode:** select the `Mission` root in `endless_survival.tscn`:
+  checkpoint spacing, how fast the horde speeds up (`Pace Increase Per Km`,
+  `Max Pace`), gate effort, survivor chance, pick-up speed, max survivors,
+  and score values.
 
 ### How the cycling input works
 
@@ -262,6 +291,10 @@ godot --headless --path . -- --solo --autopilot=90 --timescale=4 --exit-on-resul
 # Two networked instances (run in two terminals):
 godot --headless --path . -- --host --auto-start=2 --autopilot=220 --timescale=3 --exit-on-results
 godot --headless --path . -- --join=127.0.0.1 --ftp=150 --autopilot=150 --timescale=3 --exit-on-results
+
+# Endless Survival with a fixed world; the autopilot slows down for survivors.
+# Watch the log for "Picked up", "taken by the horde" and "Checkpoint" lines.
+godot --headless --path . -- --solo --mode=endless --seed=42 --autopilot=125 --autopilot-pickup --timescale=8 --exit-on-results
 ```
 
 `tests/run_all_tests.sh` runs all of the above. Other options are listed at the

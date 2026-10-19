@@ -8,6 +8,9 @@ extends Node3D
 ## declares success/failure. It sends a small snapshot ~15 times a second and
 ## reliable messages for important events. Clients only simulate their own
 ## cyclist and display what the host tells them.
+##
+## Other game modes (EndlessMission) extend this class and override the
+## "Mode hooks" below; riders, networking, the horde and results are shared.
 
 enum Stage { WAITING, COUNTDOWN, DEPARTURE, PURSUIT, GATE, FINAL_ESCAPE, SUCCESS, FAILED }
 
@@ -63,7 +66,7 @@ var _results_timer: float = -1.0
 @onready var town: TownBuilder = $Town
 @onready var zombies: ZombieDirector = $Zombies
 @onready var gate: GateObjective = $Gate
-@onready var extraction: ExtractionZone = $Extraction
+@onready var extraction: ExtractionZone = get_node_or_null("Extraction")
 @onready var cyclists_root: Node3D = $Cyclists
 @onready var camera: CameraController = $Camera
 @onready var hud: HUDController = $HUD
@@ -72,11 +75,7 @@ var _results_timer: float = -1.0
 
 func _ready() -> void:
 	add_to_group("mission")
-	town.build(route, gate_distance, extraction_distance)
-	gate.transform = route.get_frame(gate_distance)
-	gate.distance_on_route = gate_distance
-	extraction.transform = route.get_frame(extraction_distance)
-	zombies.setup(route, 60.0, extraction_distance - 20.0)
+	_build_world()
 	_spawn_cyclists()
 	camera.target = local_cyclist
 	CyclingInputManager.reset()
@@ -95,6 +94,104 @@ func _ready() -> void:
 
 func is_host() -> bool:
 	return multiplayer.is_server()
+
+
+# --- Mode hooks (overridden by other game modes) --------------------------------
+
+## Builds the level before the riders are spawned.
+func _build_world() -> void:
+	town.build(route, gate_distance, extraction_distance)
+	gate.transform = route.get_frame(gate_distance)
+	gate.distance_on_route = gate_distance
+	extraction.transform = route.get_frame(extraction_distance)
+	zombies.setup(route, 60.0, extraction_distance - 20.0)
+
+
+## Host only: stage rules once the riders are on the road.
+func _update_stages(delta: float, rear: float, lead: float) -> void:
+	match stage:
+		Stage.DEPARTURE:
+			if elapsed >= pursuit_start_time or lead >= pursuit_start_distance:
+				zombies.set_phase(ZombieDirector.Phase.PURSUIT, rear)
+				_net_set_stage.rpc(Stage.PURSUIT)
+		Stage.PURSUIT:
+			if lead >= gate_distance - gate_trigger_range:
+				zombies.set_phase(ZombieDirector.Phase.GATE, rear, gate_distance - 3.5)
+				_net_set_stage.rpc(Stage.GATE)
+		Stage.GATE:
+			_work_gate(delta)
+			if gate.progress >= 1.0:
+				zombies.set_phase(ZombieDirector.Phase.FINAL_ESCAPE, rear)
+				_net_set_stage.rpc(Stage.FINAL_ESCAPE)
+		Stage.FINAL_ESCAPE:
+			if rear >= extraction_distance:
+				zombies.set_phase(ZombieDirector.Phase.STOPPED, rear)
+				_finish(true)
+
+
+## Host only: the zombies have finished grabbing the rearmost rider.
+func _on_group_caught(rear: float) -> void:
+	zombies.set_phase(ZombieDirector.Phase.OVERRUN, rear)
+	_finish(false)
+
+
+## Every machine, every frame (e.g. streaming the world in endless mode).
+func _update_mode(_delta: float) -> void:
+	pass
+
+
+## Title / subtitle shown when a stage starts.
+func _stage_announcement(new_stage: Stage) -> Array:
+	match new_stage:
+		Stage.COUNTDOWN:
+			return [mission_title, "Escape the town before the dead find you"]
+		Stage.DEPARTURE:
+			return ["GO!", "Ride out of town - stay together"]
+		Stage.PURSUIT:
+			return ["THEY'VE HEARD YOU", "Keep pedalling - the horde is coming!"]
+		Stage.GATE:
+			return ["LOCKED GATE", "Pedal together to wind it open!"]
+		Stage.FINAL_ESCAPE:
+			return ["GATE OPEN!", "Sprint for the extraction point!"]
+		Stage.SUCCESS:
+			return ["EXTRACTED!", "You made it out alive"]
+		Stage.FAILED:
+			return ["OVERRUN", "The horde caught the group"]
+	return ["", ""]
+
+
+## Furthest the local rider may ride right now (a closed gate blocks the road).
+func _distance_limit() -> float:
+	if gate.is_open:
+		return minf(extraction_distance + 30.0, route.get_length() - 2.0)
+	return gate_distance - 3.5
+
+
+## Mode-specific entries for the results screen.
+func _extra_results() -> Dictionary:
+	return {}
+
+
+## What the top progress bar shows: [from, to, checkpoint distance, labels].
+func get_progress_window() -> Array:
+	return [0.0, extraction_distance, gate_distance, ["START", "GATE", "EXTRACTION"]]
+
+
+## Extra markers for the top progress bar: Array of [distance, Color].
+func get_progress_markers() -> Array:
+	return []
+
+
+## Host: all riders who are close enough to the gate wind it.
+func _work_gate(delta: float, extra_effort: float = 0.0) -> void:
+	var efforts := {}
+	for id: int in cyclists:
+		var c: CyclistController = cyclists[id]
+		if c.distance >= gate.distance_on_route - gate.work_range:
+			efforts[id] = c.effort
+	if extra_effort > 0.0:
+		efforts[-1] = extra_effort  # helpers (endless-mode survivors)
+	gate.add_effort(efforts, delta, cyclists.size())
 
 
 func _spawn_cyclists() -> void:
@@ -213,6 +310,7 @@ func _process(delta: float) -> void:
 			_last_countdown_beep = beep
 			audio.play("countdown_beep", -4.0)
 	_update_local_limits()
+	_update_mode(delta)
 	zombies.update_visuals(delta, get_riders())
 	var danger := get_danger()
 	camera.danger = lerpf(camera.danger, danger, clampf(delta * 2.0, 0.0, 1.0))
@@ -239,35 +337,14 @@ func _host_update(delta: float) -> void:
 		Stage.COUNTDOWN:
 			if countdown_left <= 0.0:
 				_net_set_stage.rpc(Stage.DEPARTURE)
-		Stage.DEPARTURE:
-			if elapsed >= pursuit_start_time or lead >= pursuit_start_distance:
-				zombies.set_phase(ZombieDirector.Phase.PURSUIT, rear)
-				_net_set_stage.rpc(Stage.PURSUIT)
-		Stage.PURSUIT:
-			if lead >= gate_distance - gate_trigger_range:
-				zombies.set_phase(ZombieDirector.Phase.GATE, rear, gate_distance - 3.5)
-				_net_set_stage.rpc(Stage.GATE)
-		Stage.GATE:
-			var efforts := {}
-			for id: int in cyclists:
-				var c: CyclistController = cyclists[id]
-				if c.distance >= gate_distance - gate.work_range:
-					efforts[id] = c.effort
-			gate.add_effort(efforts, delta, cyclists.size())
-			if gate.progress >= 1.0:
-				zombies.set_phase(ZombieDirector.Phase.FINAL_ESCAPE, rear)
-				_net_set_stage.rpc(Stage.FINAL_ESCAPE)
-		Stage.FINAL_ESCAPE:
-			if rear >= extraction_distance:
-				zombies.set_phase(ZombieDirector.Phase.STOPPED, rear)
-				_finish(true)
+		_:
+			_update_stages(delta, rear, lead)
 
 	if is_riding_stage():
 		elapsed += delta
 		zombies.simulate(delta, rear, get_rearmost_speed())
 		if zombies.is_catching():
-			zombies.set_phase(ZombieDirector.Phase.OVERRUN, rear)
-			_finish(false)
+			_on_group_caught(rear)
 	elif stage == Stage.FAILED:
 		zombies.simulate(delta, rear, 0.0)
 
@@ -283,10 +360,7 @@ func _update_local_limits() -> void:
 		return
 	local_cyclist.can_ride = stage in [Stage.DEPARTURE, Stage.PURSUIT, Stage.GATE, Stage.FINAL_ESCAPE, Stage.SUCCESS]
 	local_cyclist.is_caught = stage == Stage.FAILED
-	if gate.is_open:
-		local_cyclist.distance_limit = minf(extraction_distance + 30.0, route.get_length() - 2.0)
-	else:
-		local_cyclist.distance_limit = gate_distance - 3.5
+	local_cyclist.distance_limit = _distance_limit()
 
 
 func _finish(success: bool) -> void:
@@ -309,6 +383,7 @@ func _finish(success: bool) -> void:
 		"gate_opened": gate.is_open,
 		"riders": riders,
 	}
+	r.merge(_extra_results())
 	_net_results.rpc(r)
 	_net_set_stage.rpc(Stage.SUCCESS if success else Stage.FAILED)
 
@@ -328,30 +403,30 @@ func _net_set_stage(new_stage: Stage) -> void:
 		return
 	stage = new_stage
 	print("[Mission] Stage -> %s at %.1fs (lead %.0fm, rear %.0fm)" % [STAGE_NAMES[stage], elapsed, get_lead_distance(), get_rearmost_distance()])
+	var text := _stage_announcement(stage)
+	var duration := 3.0
 	match stage:
 		Stage.COUNTDOWN:
 			countdown_left = countdown_seconds
-			announced.emit(mission_title, "Escape the town before the dead find you", countdown_seconds + 1.0)
+			duration = countdown_seconds + 1.0
 		Stage.DEPARTURE:
 			audio.play("go", -2.0)
-			announced.emit("GO!", "Ride out of town - stay together", 2.0)
+			duration = 2.0
 		Stage.PURSUIT:
 			audio.play("horde_roar", -2.0)
-			announced.emit("THEY'VE HEARD YOU", "Keep pedalling - the horde is coming!", 3.0)
-		Stage.GATE:
-			announced.emit("LOCKED GATE", "Pedal together to wind it open!", 3.0)
 		Stage.FINAL_ESCAPE:
 			gate.open_gate()
 			audio.play("gate_open")
-			announced.emit("GATE OPEN!", "Sprint for the extraction point!", 3.0)
 		Stage.SUCCESS:
 			audio.play("success")
-			announced.emit("EXTRACTED!", "You made it out alive", results_delay)
+			duration = results_delay
 			_results_timer = results_delay
 		Stage.FAILED:
 			audio.play("failure")
-			announced.emit("OVERRUN", "The horde caught the group", results_delay)
+			duration = results_delay
 			_results_timer = results_delay
+	if text[0] != "":
+		announced.emit(text[0], text[1], duration)
 	stage_changed.emit(stage)
 
 
@@ -394,7 +469,7 @@ func _on_player_left(peer_id: int) -> void:
 
 func _on_replay_requested() -> void:
 	if is_host():
-		MultiplayerManager.start_mission()
+		MultiplayerManager.start_mission(MultiplayerManager.mission_mode)
 
 
 func _on_menu_requested() -> void:

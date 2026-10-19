@@ -27,6 +27,16 @@ result "solo: weak rider is caught" 2 $?
 "$GODOT" --headless --path . -- --solo --autopilot=60 --timescale=6 --exit-on-results --replays=1 --quit-after=120 > "$LOG_DIR/solo_replay.log" 2>&1
 result "solo: replay restarts the mission" 2 $?
 
+# Endless Survival: a rider who picks up survivors loses one to the horde
+# before being caught; the world seed is fixed so the run is repeatable.
+"$GODOT" --headless --path . -- --solo --mode=endless --seed=42 --autopilot=125 --autopilot-pickup --timescale=10 --exit-on-results --quit-after=150 > "$LOG_DIR/endless_solo.log" 2>&1
+CODE=$?
+if [ "$CODE" = 2 ] && grep -q "Picked up" "$LOG_DIR/endless_solo.log" && grep -q "taken by the horde" "$LOG_DIR/endless_solo.log"; then
+	result "endless: survivors picked up, one taken by the horde, then caught" 0 0
+else
+	result "endless: survivors picked up, one taken by the horde, then caught" 2 "$CODE"
+fi
+
 PORT=$((20000 + RANDOM % 20000))
 "$GODOT" --headless --path . -- --host --port=$PORT --auto-start=2 --name=Host --autopilot=220 --timescale=3 --exit-on-results --replays=1 --quit-after=200 > "$LOG_DIR/mp_host.log" 2>&1 &
 HOST_PID=$!
@@ -42,6 +52,26 @@ if diff <(grep -o "Stage -> [A-Z_]*" "$LOG_DIR/mp_host.log") <(grep -o "Stage ->
 	result "multiplayer: identical mission state on both machines" 0 0
 else
 	result "multiplayer: identical mission state on both machines" 0 1
+fi
+
+# Endless multiplayer: both machines must see identical stages, checkpoints,
+# pick-ups and losses (same world seed). The run is cut off by --quit-after,
+# so the shorter of the two event lists is compared against the other.
+PORT=$((20000 + RANDOM % 20000))
+"$GODOT" --headless --path . -- --host --mode=endless --seed=7 --port=$PORT --auto-start=2 --autopilot=160 --autopilot-pickup --autopilot-react=300 --timescale=10 --exit-on-results --quit-after=110 > "$LOG_DIR/endless_host.log" 2>&1 &
+HOST_PID=$!
+sleep 2
+"$GODOT" --headless --path . -- --join=127.0.0.1 --port=$PORT --ftp=170 --autopilot=140 --autopilot-react=270 --timescale=10 --exit-on-results --quit-after=110 > "$LOG_DIR/endless_client.log" 2>&1
+wait $HOST_PID
+EVENTS="Stage -> [A-Z_]*|Checkpoint [0-9]* passed|Picked up [A-Za-z]*|Left [A-Za-z]* behind|[A-Za-z]* was taken"
+grep -oE "$EVENTS" "$LOG_DIR/endless_host.log" > "$LOG_DIR/endless_host.events"
+grep -oE "$EVENTS" "$LOG_DIR/endless_client.log" > "$LOG_DIR/endless_client.events"
+N=$(( $(wc -l < "$LOG_DIR/endless_host.events") < $(wc -l < "$LOG_DIR/endless_client.events") ? $(wc -l < "$LOG_DIR/endless_host.events") : $(wc -l < "$LOG_DIR/endless_client.events") ))
+if [ "$N" -gt 5 ] && diff <(head -n "$N" "$LOG_DIR/endless_host.events") <(head -n "$N" "$LOG_DIR/endless_client.events") > /dev/null \
+		&& grep -q "Checkpoint" "$LOG_DIR/endless_client.events" && grep -q "Picked up" "$LOG_DIR/endless_client.events"; then
+	result "endless multiplayer: identical world events on both machines ($N events)" 0 0
+else
+	result "endless multiplayer: identical world events on both machines" 0 1
 fi
 
 # Trainer bridge (Go): Bluetooth parsing unit tests, Windows build, then

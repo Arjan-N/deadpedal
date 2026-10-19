@@ -79,6 +79,18 @@ func get_point(distance: float, lateral: float = 0.0) -> Vector3:
 	return f.origin + f.basis.x * lateral
 
 
+## How far a point is from the road's centre line. `near_distance` is
+## roughly where along the road the point is (the search covers +-40 m).
+func distance_to_road(point: Vector3, near_distance: float) -> float:
+	var best := INF
+	var d := near_distance - 40.0
+	while d <= near_distance + 40.0:
+		var p := get_point(d)
+		best = minf(best, Vector2(point.x - p.x, point.z - p.z).length())
+		d += 2.0
+	return best
+
+
 ## Signed heading change (radians per metre) - used to lean riders into bends.
 func get_curvature(distance: float) -> float:
 	var f1 := get_frame(distance - 4.0).basis.z

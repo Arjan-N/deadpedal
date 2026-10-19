@@ -19,7 +19,13 @@ signal player_left(peer_id: int)
 
 const DEFAULT_PORT := 7777
 const MAX_PLAYERS := 6
-const MISSION_SCENE := "res://scenes/mission/escape_the_town.tscn"
+## Game modes and their scenes.
+const MODE_STORY := "story"
+const MODE_ENDLESS := "endless"
+const MISSION_SCENES := {
+	MODE_STORY: "res://scenes/mission/escape_the_town.tscn",
+	MODE_ENDLESS: "res://scenes/mission/endless_survival.tscn",
+}
 const MENU_SCENE := "res://scenes/ui/main_menu.tscn"
 
 ## peer_id -> { "name": String }
@@ -27,6 +33,9 @@ var players: Dictionary = {}
 var is_online: bool = false
 ## Shown by the main menu after returning from a dropped session.
 var last_message: String = ""
+## The mode and world seed of the current/last mission (same on every machine).
+var mission_mode: String = MODE_STORY
+var mission_seed: int = 1
 
 
 func _ready() -> void:
@@ -58,10 +67,10 @@ func get_player_name(peer_id: int) -> String:
 	return str(players.get(peer_id, {}).get("name", "Rider %d" % peer_id))
 
 
-func start_solo() -> void:
+func start_solo(mode: String = MODE_STORY) -> void:
 	leave()
 	players = {1: {"name": CyclingInputManager.rider_name}}
-	get_tree().change_scene_to_file(MISSION_SCENE)
+	start_mission(mode)
 
 
 func host_game(port: int = DEFAULT_PORT) -> Error:
@@ -99,12 +108,16 @@ func leave() -> void:
 
 
 ## Host only: load the mission on every machine (also used for "Replay").
-func start_mission() -> void:
+## Each run gets a new world seed; every machine builds the same world from it.
+func start_mission(mode: String = MODE_STORY) -> void:
 	if not is_host():
 		return
 	if is_online:
 		multiplayer.multiplayer_peer.refuse_new_connections = true
-	_net_load_mission.rpc(players)
+	var seed_value := randi() % 1000000 + 1
+	if DevTools.options.has("seed"):
+		seed_value = int(DevTools.options["seed"])
+	_net_load_mission.rpc(players, mode, seed_value)
 
 
 ## Leave the session and go back to the title screen.
@@ -115,9 +128,11 @@ func return_to_menu(message: String = "") -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _net_load_mission(roster: Dictionary) -> void:
+func _net_load_mission(roster: Dictionary, mode: String, seed_value: int) -> void:
 	players = roster
-	get_tree().change_scene_to_file(MISSION_SCENE)
+	mission_mode = mode if MISSION_SCENES.has(mode) else MODE_STORY
+	mission_seed = seed_value
+	get_tree().change_scene_to_file(MISSION_SCENES[mission_mode])
 
 
 ## Client -> host: introduce ourselves after connecting.

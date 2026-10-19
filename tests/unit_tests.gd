@@ -12,9 +12,11 @@ func _ready() -> void:
 	test_simulated_input()
 	test_input_manager_effort_is_ftp_relative()
 	test_route()
+	test_endless_route()
 	test_gate_objective()
 	test_zombie_director()
 	test_sound_bank()
+	test_high_scores()
 	await test_trainer_bridge_input()
 	print("")
 	if _failures == 0:
@@ -268,3 +270,56 @@ func test_trainer_bridge_input() -> void:
 	check(input.get_gear() == 0, "no Click connected: no gear shown")
 	udp.close()
 	input.queue_free()
+
+
+func test_endless_route() -> void:
+	print("EndlessRoute")
+	var a := EndlessRoute.new()
+	var b := EndlessRoute.new()
+	var c := EndlessRoute.new()
+	a.reset(42)
+	b.reset(42)
+	c.reset(7)
+	var smooth := true
+	var same := true
+	var max_turn := 0.0
+	var prev := a.get_point(0.0)
+	var prev_fwd := -a.get_frame(0.0).basis.z
+	for i in range(1, 4001):  # 20 km in 5 m steps
+		var d := i * 5.0
+		var p := a.get_point(d)
+		if absf(p.distance_to(prev) - 5.0) > 0.05:
+			smooth = false
+		if p.distance_to(b.get_point(d)) > 0.001:
+			same = false
+		var fwd := -a.get_frame(d).basis.z
+		max_turn = maxf(max_turn, rad_to_deg(prev_fwd.angle_to(fwd)))
+		prev = p
+		prev_fwd = fwd
+	check(smooth, "distance along the endless road matches travelled distance (20 km)")
+	check(max_turn < 3.0, "no sharp kinks: max %.2f deg per 5 m" % max_turn)
+	check(same, "same seed gives the same road on every machine")
+	check(a.get_point(3000.0).distance_to(c.get_point(3000.0)) > 1.0, "a different seed gives a different road")
+	check(a.get_point(20000.0).z < -15000.0, "the road keeps heading onwards (no loops)")
+	check(a.get_point(-50.0).distance_to(a.get_point(0.0)) > 49.0, "positions behind the start are defined")
+	a.free()
+	b.free()
+	c.free()
+
+
+func test_high_scores() -> void:
+	print("HighScores")
+	var real_path := HighScores.path
+	HighScores.path = "user://test_scores.cfg"
+	DirAccess.remove_absolute(HighScores.path)
+	check(HighScores.load_scores().is_empty(), "starts empty")
+	check(HighScores.add({"score": 1000, "distance": 900.0}) == 1, "first run is #1")
+	check(HighScores.add({"score": 500, "distance": 450.0}) == 2, "a lower score ranks below")
+	check(HighScores.add({"score": 2000, "distance": 1800.0}) == 1, "a better score takes #1")
+	for i in 12:
+		HighScores.add({"score": 600 + i, "distance": 500.0})
+	check(HighScores.load_scores().size() == HighScores.MAX_ENTRIES, "keeps only the top %d" % HighScores.MAX_ENTRIES)
+	check(HighScores.add({"score": 1, "distance": 1.0}) == 0, "a score below the table isn't ranked")
+	check(int(HighScores.best()["score"]) == 2000, "best() returns the top score")
+	DirAccess.remove_absolute(HighScores.path)
+	HighScores.path = real_path

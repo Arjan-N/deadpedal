@@ -19,6 +19,7 @@ var mission: MissionManager
 
 var _vignette: ColorRect
 var _route_bar: RouteProgressBar
+var _route_labels: Array[Label] = []
 var _objective: Label
 var _next_objective: Label
 var _banner: VBoxContainer
@@ -150,6 +151,7 @@ func _build() -> void:
 	l_gate.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var l_end := _label(marks, "EXTRACTION", 18, COL_GOOD, HORIZONTAL_ALIGNMENT_RIGHT)
 	l_end.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_route_labels = [l_start, l_gate, l_end]
 	_route_bar = RouteProgressBar.new()
 	_route_bar.custom_minimum_size = Vector2(960, 30)
 	_route_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -351,11 +353,17 @@ func _process(delta: float) -> void:
 		_next_objective.label_settings.font_color = COL_DANGER if int(_time * 3.0) % 2 == 0 else COL_WARN
 	else:
 		_next_objective.label_settings.font_color = COL_WARN
-	_route_bar.total = mission.extraction_distance
-	_route_bar.gate_at = mission.gate_distance
-	_route_bar.gate_open = mission.gate.is_open
+	var window := mission.get_progress_window()
+	_route_bar.from_d = window[0]
+	_route_bar.to_d = window[1]
+	_route_bar.gate_at = window[2]
+	_route_bar.show_end_marker = window[3][2] != ""
+	_route_bar.gate_open = mission.gate.is_open and absf(window[2] - mission.gate.distance_on_route) < 1.0
+	for i in 3:
+		_route_labels[i].text = window[3][i]
+	_route_bar.markers = mission.get_progress_markers()
 	var horde_visible := mission.zombies.phase != ZombieDirector.Phase.DORMANT
-	_route_bar.horde_at = mission.zombies.front_distance if horde_visible else -1.0
+	_route_bar.horde_at = mission.zombies.front_distance if horde_visible else -INF
 	var dots := []
 	for c: CyclistController in mission.get_riders():
 		dots.append([c.distance, c.jersey_color, c == me])
@@ -502,11 +510,50 @@ func _on_announced(title: String, subtitle: String, duration: float) -> void:
 
 # --- Results -----------------------------------------------------------------
 
+func _endless_result_rows(grid: GridContainer, r: Dictionary, t: float) -> void:
+	var rows := [
+		["SCORE", "%d" % int(r.get("score", 0))],
+		["Time survived", "%d:%02d" % [int(t) / 60, int(t) % 60]],
+		["Checkpoints opened", "%d" % int(r.get("checkpoints", 0))],
+		["Survivors rescued", "%d" % int(r.get("survivors_rescued", 0))],
+		["Highest speed", "%.1f km/h" % (float(r.get("my_max_speed", 0.0)) * 3.6)],
+	]
+	for row: Array in rows:
+		_label(grid, row[0], 28, COL_DIM)
+		_label(grid, row[1], 28, COL_WARN if row[0] == "SCORE" else COL_TEXT)
+
+
+## Saves the run on this computer and shows the top 5.
+func _endless_high_scores(r: Dictionary) -> void:
+	var names := []
+	for rd: Dictionary in r.get("riders", []):
+		names.append(rd["name"])
+	var rank := HighScores.add({
+		"score": int(r.get("score", 0)),
+		"distance": float(r.get("team_distance", 0.0)),
+		"time": float(r.get("time", 0.0)),
+		"checkpoints": int(r.get("checkpoints", 0)),
+		"survivors": int(r.get("survivors_rescued", 0)),
+		"names": ", ".join(names),
+	})
+	var title := "NEW HIGH SCORE!" if rank == 1 else ("HIGH SCORES  -  you placed #%d" % rank if rank > 0 else "HIGH SCORES")
+	_label(_results_box, title, 26, COL_GOOD if rank == 1 else COL_WARN)
+	var list := HighScores.load_scores()
+	for i in mini(list.size(), 5):
+		var e: Dictionary = list[i]
+		_label(_results_box, "%d.  %6d   %.2f km   %s   %s" % [i + 1, int(e["score"]), float(e["distance"]) / 1000.0, e.get("names", ""), e.get("date", "")],
+			20, COL_TEXT if i + 1 == rank else COL_DIM)
+
+
 func show_results(r: Dictionary) -> void:
 	for c in _results_box.get_children():
 		c.queue_free()
 	var success: bool = r.get("success", false)
-	_label(_results_box, "MISSION COMPLETE" if success else "MISSION FAILED", 56, COL_GOOD if success else COL_DANGER, HORIZONTAL_ALIGNMENT_CENTER)
+	var endless: bool = r.get("mode", "") == MultiplayerManager.MODE_ENDLESS
+	if endless:
+		_label(_results_box, "YOU MADE IT %.2f KM" % (float(r.get("team_distance", 0.0)) / 1000.0), 52, COL_WARN, HORIZONTAL_ALIGNMENT_CENTER)
+	else:
+		_label(_results_box, "MISSION COMPLETE" if success else "MISSION FAILED", 56, COL_GOOD if success else COL_DANGER, HORIZONTAL_ALIGNMENT_CENTER)
 	_label(_results_box, mission.mission_title, 26, COL_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 
 	var grid := GridContainer.new()
@@ -514,7 +561,9 @@ func show_results(r: Dictionary) -> void:
 	grid.add_theme_constant_override("h_separation", 40)
 	_results_box.add_child(grid)
 	var t: float = r.get("time", 0.0)
-	var rows := [
+	if endless:
+		_endless_result_rows(grid, r, t)
+	var rows := [] if endless else [
 		["Time", "%d:%02d" % [int(t) / 60, int(t) % 60]],
 		["Distance travelled", "%d m" % roundi(r.get("my_distance", 0.0))],
 		["Highest speed", "%.1f km/h" % (float(r.get("my_max_speed", 0.0)) * 3.6)],
@@ -523,6 +572,9 @@ func show_results(r: Dictionary) -> void:
 	for row: Array in rows:
 		_label(grid, row[0], 28, COL_DIM)
 		_label(grid, row[1], 28, COL_TEXT)
+
+	if endless:
+		_endless_high_scores(r)
 
 	var riders: Array = r.get("riders", [])
 	if riders.size() > 1:
