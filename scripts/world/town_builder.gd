@@ -10,6 +10,8 @@ extends Node3D
 ##  * start_endless() + update_streaming() - Endless Survival: the road is
 ##    dressed in 200 m chunks ahead of the riders and freed behind them, each
 ##    chunk seeded from (world seed, chunk number) so it's identical for all.
+##  * build_circuit() - the criterium: a clean, living town on race day around
+##    a closed loop (LoopRoute), with crowds at the finish.
 
 @export var random_seed: int = 1984
 @export var road_width: float = 10.0
@@ -56,6 +58,8 @@ var _road_mat: ShaderMaterial
 ## Optional: return true for distances that must stay free of buildings and
 ## cars (e.g. endless-mode checkpoints).
 var keep_clear: Callable = func(_d: float) -> bool: return false
+## A living town (criterium): no damage, fires, rubble or abandoned cars.
+var _clean := false
 
 
 func build(route: Route, gate_distance: float, extraction_distance: float) -> void:
@@ -80,6 +84,12 @@ func build(route: Route, gate_distance: float, extraction_distance: float) -> vo
 func _make_materials() -> void:
 	_building_mat = ShaderMaterial.new()
 	_building_mat.shader = BUILDING_SHADER
+	if _clean:
+		_building_mat.set_shader_parameter("damage", 0.0)
+		_building_mat.set_shader_parameter("lit_chance", 0.0)
+		_building_mat.set_shader_parameter("color_a", Color(0.78, 0.68, 0.55))
+		_building_mat.set_shader_parameter("color_b", Color(0.62, 0.7, 0.74))
+		_building_mat.set_shader_parameter("color_c", Color(0.8, 0.55, 0.45))
 	_burnt_mat = ShaderMaterial.new()
 	_burnt_mat.shader = BUILDING_SHADER
 	_burnt_mat.set_shader_parameter("burnt", 0.75)
@@ -87,6 +97,52 @@ func _make_materials() -> void:
 	_road_mat = ShaderMaterial.new()
 	_road_mat.shader = ROAD_SHADER
 	_road_mat.set_shader_parameter("road_width", road_width)
+
+
+# --- Criterium circuit ----------------------------------------------------------
+
+## Dresses a closed loop: road, a town block inside and streets of buildings
+## outside, trees, and crowds, barriers, bunting and a gantry at the finish
+## (distance 0).
+func build_circuit(route: Route) -> void:
+	_route = route
+	_clean = true
+	_rng.seed = random_seed
+	_make_materials()
+	var length := route.get_length()
+	_build_ground()
+	_build_road(0.0, length)
+	_build_town_centre(0.0, length)
+	var half := road_width * 0.5
+	# Trees on the pavements, away from the finish.
+	var d := 40.0
+	while d < length - 130.0:
+		var side := -1.0 if _rng.randf() < 0.5 else 1.0
+		var t := PropFactory.tree(_rng)
+		t.scale = Vector3.ONE * 0.8
+		_place(t, d, side * (half + sidewalk_width - 0.6))
+		d += _rng.randf_range(14.0, 24.0)
+	# The finish straight: barriers, spectators and bunting both sides.
+	var crowd_from := -110.0
+	var crowd_to := 25.0
+	for side: float in [-1.0, 1.0]:
+		var seg := crowd_from
+		while seg < crowd_to:
+			_place(PropFactory.crowd_barrier(4.8), seg + 2.4, side * (half + 0.35), 0.0, 300.0)
+			seg += 4.8
+		var p := crowd_from + _rng.randf_range(0.0, 1.5)
+		while p < crowd_to:
+			var fan := PropFactory.spectator(_rng)
+			_place(fan, p, side * (half + _rng.randf_range(0.9, 2.2)), 90.0 * side + _rng.randf_range(-25.0, 25.0), 260.0)
+			p += _rng.randf_range(1.0, 2.6)
+	# Bunting strung across the street.
+	var b := crowd_from + 10.0
+	while b < crowd_to:
+		var flags := PropFactory.bunting(_rng, road_width + sidewalk_width * 2.0, 6.5)
+		_place(flags, b, 0.0, 90.0, 300.0)
+		b += 22.0
+	_place(PropFactory.finish_arch(road_width, "FINISH"), 0.0, 0.0, 0.0, 600.0)
+	_place(PropFactory.finish_line(road_width), 0.0, 0.0, 0.0, 400.0)
 
 
 # --- Endless streaming ---------------------------------------------------------
@@ -312,7 +368,7 @@ func _build_town_centre(from_d: float, to_d: float) -> void:
 			if not gap:
 				var lateral := side * (half + 0.3 + depth * 0.5)
 				if _footprint_clear(d + width * 0.5, lateral, depth * 0.5, width * 0.5):
-					var burnt := _rng.randf() < 0.1
+					var burnt := _rng.randf() < 0.1 and not _clean
 					var facade_x := -side * depth * 0.5  # local x of the road-facing wall
 					var b := Node3D.new()
 					var box := MeshKit.box(b, Vector3(depth, height, width), Vector3(0, height * 0.5, 0), _burnt_mat if burnt else _building_mat)
@@ -321,13 +377,13 @@ func _build_town_centre(from_d: float, to_d: float) -> void:
 					if _rng.randf() < 0.4:
 						MeshKit.box(b, Vector3(2.0, 1.4, 2.0), Vector3(_rng.randf_range(-2, 2), height + 0.7, _rng.randf_range(-2, 2)), MeshKit.mat(Color(0.25, 0.25, 0.25)))
 					# A collapsed roof corner and rubble on damaged buildings.
-					if burnt or _rng.randf() < 0.12:
+					if burnt or (_rng.randf() < 0.12 and not _clean):
 						MeshKit.box(b, Vector3(depth * 0.6, 2.0, width * 0.5), Vector3(0, height - 0.5, width * 0.2), MeshKit.mat(Color(0.12, 0.11, 0.1)), Vector3(18, 0, 0))
 						var r := PropFactory.rubble(_rng)
 						r.position = Vector3(facade_x - side * 1.2, 0, width * 0.2)
 						b.add_child(r)
 					# Overgrowth climbing the facade.
-					if _rng.randf() < 0.35:
+					if _rng.randf() < 0.35 and not _clean:
 						var vine := MeshKit.mat(Color(0.12, 0.2, 0.08))
 						var vh := _rng.randf_range(3.0, height * 0.8)
 						MeshKit.box(b, Vector3(0.3, vh, _rng.randf_range(1.5, 4.0)), Vector3(facade_x - side * 0.1, vh * 0.5, _rng.randf_range(-width * 0.3, width * 0.3)), vine)

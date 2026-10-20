@@ -114,6 +114,13 @@ def main(src: str) -> None:
     save(level(fade(cut(s(706753, True), 0.0, 6.0), 0.005, 1.0), rms_db=-18), "ui/success.ogg")  # xkeril - Victory (short sting)
     save(level(fade(cut(s(725225, True), 0.0, 7.4), 0.005, 1.5), rms_db=-20), "ui/failure.ogg")  # zombieallen - Plucked Horror Stinger
 
+    # --- Criterium (race day) ---
+    # A murmuring crowd along the course, applause when a lap is won, and the
+    # bell for bell laps.
+    save(level(make_loop(cut(s(482990, True), 20.0, 80.0), 3.0), rms_db=-24), "race/crowd_loop.ogg")  # priesjensen - People talking at cafe
+    save(level(fade(cut(s(455659, True), 0.0, 7.0), 0.05, 2.5), rms_db=-18), "race/cheer.ogg")  # kyles - applause cheer ext medium crowd
+    save(level(fade(cut(s(503134), 3.4, 7.0), 0.005, 0.6), rms_db=-16), "race/bell.ogg")  # se2001 - Small Bell Ringing
+
 
 if __name__ == "__main__":
     main(sys.argv[1])

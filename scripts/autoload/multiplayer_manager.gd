@@ -22,9 +22,12 @@ const MAX_PLAYERS := 6
 ## Game modes and their scenes.
 const MODE_STORY := "story"
 const MODE_ENDLESS := "endless"
+## The criterium points race (solo against computer riders).
+const MODE_RACE := "race"
 const MISSION_SCENES := {
 	MODE_STORY: "res://scenes/mission/escape_the_town.tscn",
 	MODE_ENDLESS: "res://scenes/mission/endless_survival.tscn",
+	MODE_RACE: "res://scenes/race/criterium.tscn",
 }
 const MENU_SCENE := "res://scenes/ui/main_menu.tscn"
 

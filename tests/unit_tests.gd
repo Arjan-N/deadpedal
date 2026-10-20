@@ -18,6 +18,9 @@ func _ready() -> void:
 	test_runners()
 	test_sound_bank()
 	test_high_scores()
+	test_loop_route()
+	test_points_race()
+	test_slipstream_and_battery()
 	await test_trainer_bridge_input()
 	print("")
 	if _failures == 0:
@@ -285,6 +288,72 @@ func test_runners() -> void:
 	copy.free()
 	r.free()
 	z.free()
+
+
+func test_loop_route() -> void:
+	print("LoopRoute (criterium circuit)")
+	var r := LoopRoute.new()
+	add_child(r)
+	var length := r.get_length()
+	check(length > 450.0 and length < 700.0, "a lap is a few hundred metres (%.0f m)" % length)
+	check(r.get_point(0.0).distance_to(r.get_point(length)) < 0.01, "the circuit closes (end = start)")
+	check(r.get_point(10.0).distance_to(r.get_point(10.0 + length * 3.0)) < 0.01, "distances wrap around laps")
+	check(r.get_point(-5.0).distance_to(r.get_point(length - 5.0)) < 0.01, "negative distances (the start grid) wrap too")
+	var smooth := true
+	var d := 0.0
+	while d < length:
+		var step := r.get_point(d).distance_to(r.get_point(d + 1.0))
+		if absf(step - 1.0) > 0.02:
+			smooth = false
+		d += 1.0
+	check(smooth, "no jumps anywhere around the lap")
+	check(r.get_outline(5.0).size() > 80, "outline for the HUD map")
+	r.free()
+
+
+func test_points_race() -> void:
+	print("PointsRace (scoring)")
+	var p := PointsRace.new()
+	p.points_to_win = 5
+	p.bell_every = 5
+	p.bell_points = 2
+	p.setup([1, 2, 3])
+	check(p.lap_completed(2, 1) == 1, "first across the line scores a point")
+	check(p.lap_completed(1, 1) == 0, "second across the line scores nothing")
+	check(not p.is_bell_lap(4) and p.is_bell_lap(5) and p.is_bell_lap(10), "every 5th lap is a bell lap")
+	for lap in [2, 3, 4]:
+		p.lap_completed(1, lap)
+	check(p.lap_completed(3, 5) == 2, "the bell lap is worth 2 points")
+	check(p.points[1] == 3 and p.laps_won[1] == 3 and p.points[3] == 2, "points and laps won are counted")
+	check(p.winner == -1, "nobody has won yet")
+	p.lap_completed(1, 6)
+	p.lap_completed(1, 7)
+	check(p.winner == 1, "first to the target wins")
+	check(p.lap_completed(2, 8) == 0, "no more points after the race is won")
+	check(p.standings()[0] == 1 and p.standings()[1] == 3, "standings sorted by points")
+
+
+func test_slipstream_and_battery() -> void:
+	print("Slipstream and battery")
+	var full := RaceManager.draft_bonus_for_gap(1.0, 0.2, 1.5, 8.0)
+	var mid := RaceManager.draft_bonus_for_gap(5.0, 0.2, 1.5, 8.0)
+	check(is_equal_approx(full, 0.2), "full shelter right on a wheel")
+	check(mid > 0.0 and mid < full, "less shelter further back")
+	check(RaceManager.draft_bonus_for_gap(9.0, 0.2, 1.5, 8.0) == 0.0, "no shelter out of range")
+	check(RaceManager.draft_bonus_for_gap(0.1, 0.2, 1.5, 8.0) == 0.0, "no shelter riding side by side")
+	var m := RideModel.new()
+	var e := m.effort_for_speed(11.0, 0.2)
+	check(absf(m.target_speed(e) * 1.2 - 11.0) < 0.05, "effort_for_speed inverts the ride model")
+	check(m.effort_for_speed(11.0, 0.2) < m.effort_for_speed(11.0, 0.0), "sheltered riders need less effort")
+	var b := 10.0
+	for i in 100:  # 10 s all-out
+		b = RideModel.step_battery(b, 1.0, 0.1, 10.0, 0.5)
+	check(absf(b - (10.0 - (1.0 - RideModel.FTP_EFFORT) * 10.0)) < 0.01, "all-out drains the battery")
+	for i in 600:
+		b = RideModel.step_battery(b, 0.0, 0.1, 10.0, 0.5)
+	check(is_equal_approx(b, 10.0), "easy riding refills it (to capacity)")
+	check(RideModel.cap_effort(1.0, 0.0) == RideModel.FTP_EFFORT, "empty battery: capped at FTP")
+	check(RideModel.cap_effort(1.0, 3.0) == 1.0, "with battery left: full effort")
 
 
 func test_sound_bank() -> void:

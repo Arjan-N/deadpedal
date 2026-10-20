@@ -40,6 +40,21 @@ else
 	result "endless: survivors picked up, pull on the front, get exhausted" 2 "$CODE"
 fi
 
+# Criterium: a race to 5 points against 7 computer riders finishes with a
+# winner, scoring every lap (the 5th, a bell lap, is worth 2). The test rider
+# races like a computer rider of equal strength; against "harder" rivals it
+# loses (exit code 2).
+"$GODOT" --headless --path . -- --solo --mode=race --seed=3 --race-points=5 --race-difficulty=1 --autopilot=150 --autopilot-race=sprinter --timescale=12 --exit-on-results --quit-after=200 > "$LOG_DIR/race.log" 2>&1
+CODE=$?
+if { [ "$CODE" = 0 ] || [ "$CODE" = 2 ]; } && grep -q "Lap 1 won by" "$LOG_DIR/race.log" && grep -q "WINNER" "$LOG_DIR/race.log" \
+		&& ! grep -q "SCRIPT ERROR" "$LOG_DIR/race.log" && { ! grep -q "Lap 5 won" "$LOG_DIR/race.log" || grep -q "Lap 5 won by [A-Za-z]* (+2" "$LOG_DIR/race.log"; }; then
+	result "criterium: race to 5 points finishes with a winner" 0 0
+else
+	result "criterium: race to 5 points finishes with a winner" 0 1
+fi
+"$GODOT" --headless --path . -- --solo --mode=race --seed=11 --race-points=5 --race-difficulty=2 --autopilot=150 --autopilot-race=sprinter --timescale=12 --exit-on-results --quit-after=200 > "$LOG_DIR/race_hard.log" 2>&1
+result "criterium: harder rivals beat an equal-strength rider" 2 $?
+
 PORT=$((20000 + RANDOM % 20000))
 "$GODOT" --headless --path . -- --host --port=$PORT --auto-start=2 --name=Host --autopilot=220 --timescale=3 --exit-on-results --replays=1 --quit-after=200 > "$LOG_DIR/mp_host.log" 2>&1 &
 HOST_PID=$!

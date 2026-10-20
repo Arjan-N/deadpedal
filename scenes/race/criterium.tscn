@@ -1,0 +1,85 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/race/race_manager.gd" id="1_race"]
+[ext_resource type="Script" path="res://scripts/world/loop_route.gd" id="2_route"]
+[ext_resource type="Script" path="res://scripts/world/town_builder.gd" id="3_town"]
+[ext_resource type="Script" path="res://scripts/camera/camera_controller.gd" id="4_camera"]
+[ext_resource type="Script" path="res://scripts/ui/race_hud.gd" id="5_hud"]
+[ext_resource type="Script" path="res://scripts/audio/mission_audio.gd" id="6_audio"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_day"]
+sky_top_color = Color(0.25, 0.47, 0.82, 1)
+sky_horizon_color = Color(0.68, 0.78, 0.88, 1)
+sky_curve = 0.15
+ground_bottom_color = Color(0.22, 0.24, 0.2, 1)
+ground_horizon_color = Color(0.62, 0.68, 0.72, 1)
+sun_angle_max = 20.0
+sky_energy_multiplier = 1.0
+
+[sub_resource type="Sky" id="Sky_day"]
+sky_material = SubResource("ProceduralSkyMaterial_day")
+
+[sub_resource type="Environment" id="Environment_day"]
+background_mode = 2
+sky = SubResource("Sky_day")
+ambient_light_source = 3
+ambient_light_color = Color(0.7, 0.75, 0.8, 1)
+ambient_light_sky_contribution = 0.75
+ambient_light_energy = 1.1
+tonemap_mode = 3
+tonemap_white = 6.0
+ssao_enabled = true
+glow_enabled = true
+glow_intensity = 0.4
+glow_bloom = 0.02
+fog_enabled = true
+fog_light_color = Color(0.7, 0.78, 0.86, 1)
+fog_density = 0.0025
+fog_sky_affect = 0.3
+fog_aerial_perspective = 0.4
+adjustment_enabled = true
+adjustment_contrast = 1.05
+adjustment_saturation = 1.1
+
+[node name="Race" type="Node3D"]
+script = ExtResource("1_race")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_day")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866, 0.354, -0.354, 0, 0.707, 0.707, 0.5, -0.612, 0.612, 0, 40, 0)
+light_color = Color(1, 0.95, 0.85, 1)
+light_energy = 1.5
+shadow_enabled = true
+shadow_normal_bias = 2.0
+directional_shadow_max_distance = 150.0
+
+[node name="Route" type="Path3D" parent="."]
+script = ExtResource("2_route")
+
+[node name="Town" type="Node3D" parent="."]
+script = ExtResource("3_town")
+random_seed = 2024
+
+[node name="Riders" type="Node3D" parent="."]
+
+[node name="LapBoard" type="Label3D" parent="."]
+pixel_size = 0.012
+billboard = 1
+modulate = Color(1, 0.92, 0.3, 1)
+outline_size = 18
+text = "LAP 1"
+font_size = 64
+
+[node name="Camera" type="Camera3D" parent="."]
+current = true
+far = 900.0
+script = ExtResource("4_camera")
+danger_shake_enabled = false
+
+[node name="HUD" type="CanvasLayer" parent="."]
+script = ExtResource("5_hud")
+
+[node name="Audio" type="Node" parent="."]
+script = ExtResource("6_audio")

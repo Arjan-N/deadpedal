@@ -10,6 +10,8 @@ uniform float cell_width = 3.0;
 uniform float floor_height = 3.2;
 uniform float lit_chance = 0.05;
 uniform float burnt = 0.0;
+// 1 = abandoned (shutters, boarded windows, grime); 0 = a living town.
+uniform float damage = 1.0;
 
 varying vec3 local_pos;
 varying vec3 local_normal;
@@ -54,7 +56,7 @@ void fragment() {
 		float r = hash(id + origin.xz);
 
 		// Vertical rain streaks / grime.
-		float streak = hash(vec2(floor(u * 2.0), origin.x)) * 0.25;
+		float streak = hash(vec2(floor(u * 2.0), origin.x)) * 0.25 * damage;
 		col *= 1.0 - streak * smoothstep(0.0, 1.0, f.y);
 		col *= mix(0.55, 1.0, smoothstep(0.0, 2.5, height_above_ground));
 
@@ -62,10 +64,15 @@ void fragment() {
 			// Ground floor: shop fronts with rolled shutters or smashed glass.
 			bool shop = f.x > 0.08 && f.x < 0.92 && height_above_ground > 0.3 && height_above_ground < 2.6;
 			if (shop) {
-				if (r < 0.55) {
+				if (r < 0.55 * damage) {
 					float slat = step(0.5, fract(height_above_ground * 6.0));
 					col = vec3(0.32, 0.33, 0.34) * (0.8 + 0.2 * slat);
 					metal = 0.4; rough = 0.6;
+				} else if (damage < 0.5 && f.y > 0.35) {
+					// Open shop: bright window display under an awning stripe.
+					col = mix(vec3(0.55, 0.62, 0.68), wall * 1.3, 0.25 * r);
+					rough = 0.1; metal = 0.2;
+					if (height_above_ground > 2.3) { col = r < 0.75 ? vec3(0.62, 0.12, 0.1) : vec3(0.1, 0.3, 0.55); }
 				} else {
 					col = vec3(0.03, 0.035, 0.04);
 					rough = 0.15;
@@ -77,7 +84,7 @@ void fragment() {
 				if (r < lit_chance) {
 					col = vec3(0.9, 0.62, 0.3);
 					emit = vec3(1.0, 0.6, 0.25) * 1.2;
-				} else if (r < 0.25) {
+				} else if (r < 0.25 * damage) {
 					col = vec3(0.24, 0.17, 0.1) * (0.8 + 0.4 * step(0.5, fract(f.y * 8.0)));
 				} else {
 					col = vec3(0.04, 0.05, 0.06) + vec3(0.06) * r;

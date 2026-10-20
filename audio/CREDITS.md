@@ -31,3 +31,6 @@ domain, no attribution required) **except one, which requires attribution**:
 | `ui/countdown_beep.ogg`, `ui/go.ogg` | [Short beep countdown](https://freesound.org/s/368779/) | gurie | CC0 |
 | `ui/success.ogg` | [Victory (short sting)](https://freesound.org/s/706753/) | xkeril | CC0 |
 | `ui/failure.ogg` | [Plucked Horror Stinger](https://freesound.org/s/725225/) | zombieallen | CC0 |
+| `race/crowd_loop.ogg` | [People talking at cafe ambience](https://freesound.org/s/482990/) | priesjensen | CC0 |
+| `race/cheer.ogg` | [applause cheer ext medium crowd enthusiastic whistling for outdoor show](https://freesound.org/s/455659/) | kyles | CC0 |
+| `race/bell.ogg` | [Small Bell Ringing.wav](https://freesound.org/s/503134/) | se2001 | CC0 |

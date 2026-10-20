@@ -32,12 +32,42 @@ func target_speed(effort: float) -> float:
 	return lerpf(min_speed_mps, max_speed_mps, shaped)
 
 
-## Returns the new speed after `delta` seconds.
-func step_speed(current: float, effort: float, delta: float, drafting: bool = false) -> float:
+## The effort needed to hold `speed` with a given slipstream bonus (the
+## inverse of target_speed; used by computer riders).
+func effort_for_speed(speed: float, bonus: float = 0.0) -> float:
+	var solo := speed / (1.0 + bonus)
+	var shaped := clampf((solo - min_speed_mps) / (max_speed_mps - min_speed_mps), 0.0, 1.0)
+	return maxf(pow(shaped, 1.0 / effort_curve), pedalling_threshold + 0.01)
+
+
+## Returns the new speed after `delta` seconds. `bonus` overrides draft_bonus
+## (the criterium's slipstream depends on how close you are).
+func step_speed(current: float, effort: float, delta: float, drafting: bool = false, bonus: float = -1.0) -> float:
 	var target := target_speed(effort)
 	if drafting:
-		target *= 1.0 + draft_bonus
+		target *= 1.0 + (draft_bonus if bonus < 0.0 else bonus)
 	# Chase the target smoothly, limited by acceleration / deceleration.
 	var max_accel := acceleration_mps2 + sprint_acceleration_bonus_mps2 * effort
 	var change := clampf((target - current) * response, -deceleration_mps2, max_accel)
 	return maxf(0.0, current + change * delta)
+
+
+# --- Battery (criterium) -------------------------------------------------------
+# Every rider has a battery of effort above their threshold (FTP), measured in
+# "effort-seconds". Riding above the threshold drains it, riding below refills
+# it. When it's empty, effort is capped at the threshold until it recovers.
+
+## Effort at FTP (effort = power / (FTP * 1.6), see CyclingInputManager).
+const FTP_EFFORT := 1.0 / 1.6
+
+
+## The effort a rider can actually put out with this much battery left.
+static func cap_effort(effort: float, battery: float, threshold: float = FTP_EFFORT) -> float:
+	return minf(effort, threshold) if battery <= 0.0 else effort
+
+
+## Battery after riding at `effort` for `delta` seconds.
+static func step_battery(battery: float, effort: float, delta: float, capacity: float, recharge: float, threshold: float = FTP_EFFORT) -> float:
+	if effort > threshold:
+		return maxf(battery - (effort - threshold) * delta, 0.0)
+	return minf(battery + (threshold - effort) * recharge * delta, capacity)

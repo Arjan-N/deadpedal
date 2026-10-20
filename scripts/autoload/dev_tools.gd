@@ -23,6 +23,11 @@ extends Node
 ##   --autopilot-pickup     with --autopilot (endless mode): ease off for
 ##                          survivors, crates and exhausted companions, and
 ##                          sprint past screamers
+##   --mode=race            (with --solo) the criterium; also --race-points=N,
+##                          --race-opponents=N, --race-difficulty=0|1|2 and
+##                          --autopilot-sprint-at=M (metres before the line),
+##                          --autopilot-race=sprinter|diesel|... (you race
+##                          like that computer rider), --log-race
 ##   --log-horde            print the horde gap every 2 s (balance tuning)
 ##   --timescale=F          speed the game up (testing)
 ##   --screenshot=PATH      save screenshots; with --screenshot-at=S1,S2,...
@@ -48,6 +53,7 @@ var _results_seen: int = 0
 ## riders can't sprint forever.
 const AUTOPILOT_RESERVE := 18000.0
 var _reserve: float = AUTOPILOT_RESERVE
+var _sprinting := false
 
 
 func _ready() -> void:
@@ -107,6 +113,7 @@ func _process(delta: float) -> void:
 
 	var mission := get_tree().get_first_node_in_group("mission") as MissionManager
 	if mission == null:
+		_process_race(delta)
 		return
 	if _mission_ref == null or _mission_ref.get_ref() != mission:
 		_mission_ref = weakref(mission)
@@ -152,6 +159,10 @@ func _process(delta: float) -> void:
 		else:
 			_reserve = minf(_reserve + (ftp - watts) * 0.5 * delta, AUTOPILOT_RESERVE)
 		(CyclingInputManager.source as ScriptedCyclingInput).constant_watts = watts
+	_maybe_screenshot()
+
+
+func _maybe_screenshot() -> void:
 	if options.has("screenshot") and _shot_index < _shots.size() and _mission_time >= _shots[_shot_index]:
 		var path := String(options["screenshot"])
 		if path.contains("%d"):
@@ -159,6 +170,68 @@ func _process(delta: float) -> void:
 		get_viewport().get_texture().get_image().save_png(path)
 		print("[DevTools] screenshot saved: %s" % path)
 		_shot_index += 1
+
+
+## Criterium: exit on results, screenshots and the racing autopilot
+## (--autopilot=W rides at W watts in the bunch and sprints for the line).
+func _process_race(delta: float) -> void:
+	var race := get_tree().get_first_node_in_group("race") as RaceManager
+	if race == null:
+		return
+	if _mission_ref == null or _mission_ref.get_ref() != race:
+		_mission_ref = weakref(race)
+		_mission_time = 0.0
+		_shot_index = 0
+		_sprinting = false
+		if options.has("exit-on-results"):
+			race.race_finished.connect(_on_race_finished)
+	var prev := _mission_time
+	_mission_time += delta
+	var me := race.local_cyclist
+	if options.has("log-race") and int(_mission_time / 3.0) != int(prev / 3.0) and race.order.size() > 0:
+		var lead: float = (race.order[0] as CyclistController).distance
+		var parts := []
+		for c: CyclistController in race.order:
+			parts.append("%s(%s) -%.0f e%.2f b%.0f%%%s" % [c.player_name, race.personality_of(c.peer_id).substr(0, 4), lead - c.distance,
+				c.effort, c.battery / c.battery_capacity * 100.0, " d" if c.draft_bonus_override > 0.005 else ""])
+		print("[RaceLog] t=%.0f lap %d to_line %.0f v=%.1f | %s" % [race.elapsed, race.current_lap(), race.metres_to_line(race.order[0]),
+			(race.order[0] as CyclistController).speed, "  ".join(parts)])
+	if CyclingInputManager.source is ScriptedCyclingInput and me and race.order.size() > 0 and not options.has("autopilot-profile") \
+			and not options.has("autopilot-race"):
+		var watts := float(options.get("autopilot", "200"))
+		var sprint := float(options.get("autopilot-react", str(watts * 2.0)))
+		var to_line := race.metres_to_line(me)
+		var lead_gap := (race.order[0] as CyclistController).distance - me.distance
+		var sprint_at := float(options.get("autopilot-sprint-at", "220"))
+		if not race.is_racing() or to_line > sprint_at or lead_gap > 30.0:
+			_sprinting = false
+		elif not _sprinting and me.battery > me.battery_capacity * 0.4:
+			_sprinting = true
+		if _sprinting:
+			watts = sprint
+		else:
+			var i := race.order.find(me)
+			if i == 0:
+				watts *= 0.8  # on the front: don't do all the work
+			else:
+				var gap := (race.order[i - 1] as CyclistController).distance - me.distance
+				if gap > 3.0 and gap < 25.0:
+					watts *= 1.3  # close the gap to the wheel ahead
+		(CyclingInputManager.source as ScriptedCyclingInput).constant_watts = watts
+	_maybe_screenshot()
+
+
+func _on_race_finished(results: Dictionary) -> void:
+	if _exit_pending:
+		return
+	_exit_pending = true
+	var points := []
+	for s: Dictionary in results.get("standings", []):
+		points.append("%s:%d" % [s["name"], s["points"]])
+	print("[DevTools] RESULT race success=%s winner=%s laps=%d time=%.1f points=%s" % [results.get("success"), results.get("winner"),
+		results.get("laps", 0), results.get("time", 0.0), ", ".join(points)])
+	await get_tree().create_timer(1.5 * Engine.time_scale).timeout
+	get_tree().quit(0 if results.get("success", false) else 2)
 
 
 func _on_mission_finished(results: Dictionary) -> void:

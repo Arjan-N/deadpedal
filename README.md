@@ -4,9 +4,10 @@ A cooperative zombie-survival cycling game prototype. Your pedalling is the
 controller: keep your speed up, stay together, and escape the town before the
 horde catches the group.
 
-**Status:** playable prototype. Two modes: the story mission *Escape the
-Town* and **Endless Survival**, both single-player or 2–6 player
-LAN/host-and-join multiplayer. Ride with a
+**Status:** playable prototype. Three modes: the story mission *Escape the
+Town* and **Endless Survival** (both single-player or 2–6 player
+LAN/host-and-join multiplayer), and **Criterium**, a zombie-free points race
+against computer riders (single-player). Ride with a
 **Bluetooth smart trainer** (e.g. Zwift Hub One) through the included trainer
 bridge, or with the **keyboard simulation** for development.
 
@@ -101,6 +102,29 @@ forest and open farmland. Ride as far as you can.
 - **Score** = metres ridden + 500 per checkpoint + 250 per survivor rescued.
   The best 10 runs are saved on your PC; your best shows on the title screen.
 - Every run has a new random world. In multiplayer, everyone gets the same one.
+
+### Criterium (points race, no zombies)
+
+A race on a ~560 m town circuit on a sunny race day, against 3, 5 or 7
+computer riders. **The first rider across the line on each lap scores a point;
+every 5th lap is a bell lap worth 2. First to 5, 10 or 15 points wins.** A race
+to 10 points takes roughly 15–25 minutes.
+
+- **Slipstream:** riding right behind someone (within ~1.5 m) you go about
+  20% faster for the same effort, fading to nothing by 8 m. The HUD shows
+  *SHELTERED 20% behind Dan*, *IN THE WIND* or *DROPPED*.
+- **Sprint battery:** everyone (you and the computer riders) has one. Riding
+  above your FTP drains it; easy riding refills it. When it's empty you can't
+  go above FTP until it recovers, so you can't win every lap. Pick your laps.
+- **Computer riders** follow the same rules, with personalities: *diesels*
+  pull on the front, *sprinters* sit in and launch ~200 m out, *attackers* go
+  early, *wheelsuckers* never lead, *opportunists* wait for bell laps. They
+  react to attacks (a quick one can open a gap), chase breaks, take turns on
+  the front, regroup after the sprint, and fight for every lap near the end.
+- **HUD:** lap and metres to the line, the points table, a live map of the
+  circuit with every rider, your shelter, and your battery.
+- Choose points, number of rivals and their strength (*Easier / Equal /
+  Harder*) under the CRITERIUM button on the title screen.
 
 ## 1b. Riding with a smart trainer (Zwift Hub One and others)
 
@@ -221,6 +245,7 @@ scenes/
   ui/main_menu.tscn              Title screen + lobby
   mission/escape_the_town.tscn   The story mission (open this to tweak the level)
   mission/endless_survival.tscn  Endless Survival
+  race/criterium.tscn            The criterium (points race)
   cyclist/cyclist.tscn           One rider (tune the RideModel here)
   zombies/zombie.tscn            One zombie
 scripts/
@@ -248,13 +273,21 @@ scripts/
     high_scores.gd               Endless high-score table (saved locally)
     gate_objective.gd            Cooperative gate (team effort)
     extraction_zone.gd           Safe zone visuals
+  race/
+    race_manager.gd              Criterium: slipstream, lanes, laps, points, results
+    race_bot.gd                  Computer rider brains (personalities)
+    points_race.gd               Scoring rules (laps, bell laps, winner)
+    race_settings.gd             Title-screen race options (saved locally)
   world/
     route.gd                     The road path; everything moves by distance along it
+    loop_route.gd                Closed circuit (straights + rounded corners)
     endless_route.gd             Never-ending road generated from a seed
     town_builder.gd              Procedural road, buildings, props, lights;
                                  streams 200 m chunks in endless mode
     prop_factory.gd, mesh_kit.gd Placeholder models from primitive shapes
   ui/hud_controller.gd, route_progress_bar.gd, main_menu.gd
+  ui/race_hud.gd, race_map.gd    Criterium HUD and the live circuit map
+  ui/hud_kit.gd                  Shared HUD building blocks
   audio/sound_bank.gd, mission_audio.gd  Recorded sounds by name; mission mix
 audio/                           Sound files + CREDITS.md (licences)
 tools/audio/build_sounds.py      How each sound was cut from its source
@@ -278,6 +311,11 @@ tests/unit_tests.tscn            Automated checks
   `Wheel Recovery`...), runners (`Runners From`, `Runner Interval`,
   `Runner Slowdown`) and score values. Runner speed is on the `Zombies` node
   (`Runner Speed Bonus`, `Runner Max Speed`).
+- **Criterium:** select the `Race` root in `race/criterium.tscn` for the
+  bell laps, slipstream (`Max Draft Bonus`, `Draft Range`...) and battery
+  (`Battery Capacity`, `Battery Recharge`). The circuit's shape is the `Route`
+  node's `Corners` and `Corner Radii`. Rider personalities are the `PROFILES`
+  table at the top of `scripts/race/race_bot.gd`.
 
 ### How the cycling input works
 
@@ -315,6 +353,10 @@ godot --headless --path . -- --join=127.0.0.1 --ftp=150 --autopilot=150 --timesc
 # crates, sprints past screamers and runners (with a limited sprint reserve)
 # and drops back for exhausted survivors. Watch the log for "[Endless]" lines.
 godot --headless --path . -- --solo --mode=endless --seed=7 --autopilot=150 --autopilot-pickup --autopilot-react=270 --timescale=10 --exit-on-results
+
+# Criterium to 5 points; the autopilot races like a computer "sprinter".
+# --log-race prints the bunch every 3 s (gaps, efforts, batteries).
+godot --headless --path . -- --solo --mode=race --seed=3 --race-points=5 --autopilot=150 --autopilot-race=sprinter --timescale=10 --exit-on-results
 ```
 
 `tests/run_all_tests.sh` runs all of the above. Other options are listed at the
@@ -333,3 +375,6 @@ when launching from a terminal.
 - Placeholder visuals throughout. Sounds are real recordings from Freesound
   (see `audio/CREDITS.md`; one requires attribution).
 - Zombies along the roadside are scenery. Only the horde can catch you.
+- The criterium is single-player only (you against computer riders). Riders
+  pass through each other (no collisions) and can't steer: the race is decided
+  by effort, timing and slipstream.

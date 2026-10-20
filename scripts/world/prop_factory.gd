@@ -285,3 +285,83 @@ static func signal_smoke(color: Color) -> CPUParticles3D:
 	ramp.set_color(1, Color(color.darkened(0.3), 0.0))
 	p.color_ramp = ramp
 	return p
+
+
+# --- Criterium (a living town on race day) -------------------------------------
+
+## Crowd barriers: metal fence panels, `length` metres long along -Z.
+static func crowd_barrier(length: float) -> Node3D:
+	var root := Node3D.new()
+	var metal := MeshKit.mat(Color(0.75, 0.77, 0.78), 0.5, 0.0, 0.6)
+	var panels := maxi(1, int(length / 2.4))
+	var panel_len := length / panels
+	for i in panels:
+		var z := -length * 0.5 + panel_len * (i + 0.5)
+		MeshKit.box(root, Vector3(0.05, 0.05, panel_len - 0.1), Vector3(0, 1.05, z), metal)
+		MeshKit.box(root, Vector3(0.05, 0.05, panel_len - 0.1), Vector3(0, 0.2, z), metal)
+		for b in 5:
+			MeshKit.box(root, Vector3(0.03, 0.85, 0.03), Vector3(0, 0.62, z - panel_len * 0.4 + b * panel_len * 0.2), metal)
+		MeshKit.box(root, Vector3(0.6, 0.04, 0.08), Vector3(0, 0.02, z - panel_len * 0.5 + 0.1), metal)
+	return root
+
+
+## A spectator (stands facing -Z, towards the road when placed sideways).
+static func spectator(rng: RandomNumberGenerator) -> Node3D:
+	var root := Node3D.new()
+	var shirts := [Color(0.85, 0.2, 0.15), Color(0.15, 0.4, 0.8), Color(0.95, 0.8, 0.2), Color(0.2, 0.65, 0.3),
+		Color(0.9, 0.9, 0.9), Color(0.6, 0.25, 0.65), Color(0.95, 0.5, 0.15)]
+	var skin := [Color(0.85, 0.66, 0.52), Color(0.62, 0.45, 0.33), Color(0.42, 0.3, 0.22), Color(0.9, 0.75, 0.62)]
+	var shirt := MeshKit.mat(shirts[rng.randi() % shirts.size()])
+	var trousers := MeshKit.mat(Color(0.15, 0.17, 0.25) if rng.randf() < 0.6 else Color(0.35, 0.3, 0.25))
+	var s := rng.randf_range(0.88, 1.08)
+	for side: float in [-1.0, 1.0]:
+		MeshKit.capsule(root, 0.08 * s, 0.85 * s, Vector3(0.11 * side, 0.43 * s, 0), trousers)
+	MeshKit.capsule(root, 0.19 * s, 0.7 * s, Vector3(0, 1.2 * s, 0), shirt)
+	MeshKit.sphere(root, 0.12 * s, Vector3(0, 1.7 * s, 0), MeshKit.mat(skin[rng.randi() % skin.size()]))
+	if rng.randf() < 0.5:
+		# Arms up, cheering.
+		for side: float in [-1.0, 1.0]:
+			MeshKit.capsule(root, 0.05 * s, 0.6 * s, Vector3(0.27 * side * s, 1.65 * s, 0), shirt, Vector3(0, 0, -25.0 * side))
+	return root
+
+
+## Start/finish gantry over the road (road_width wide), facing -Z.
+static func finish_arch(road_width: float, text: String) -> Node3D:
+	var root := Node3D.new()
+	var post := MeshKit.mat(Color(0.12, 0.12, 0.14), 0.4, 0.0, 0.6)
+	var half := road_width * 0.5 + 1.0
+	for side: float in [-1.0, 1.0]:
+		MeshKit.box(root, Vector3(0.5, 6.5, 0.5), Vector3(side * half, 3.25, 0), post)
+	MeshKit.box(root, Vector3(half * 2.0 + 0.5, 1.6, 0.5), Vector3(0, 6.2, 0), MeshKit.mat(Color(0.85, 0.1, 0.12), 0.5))
+	for face: float in [-1.0, 1.0]:
+		var label := sign_label(text, Color(1, 1, 1), 110)
+		label.position = Vector3(0, 6.2, face * 0.27)
+		label.rotation.y = 0.0 if face > 0.0 else PI  # readable from both sides
+		root.add_child(label)
+	return root
+
+
+## Checkered finish line painted across the road (lies flat, centred).
+static func finish_line(road_width: float) -> Node3D:
+	var root := Node3D.new()
+	var white := MeshKit.mat(Color(0.95, 0.95, 0.95), 0.6)
+	var black := MeshKit.mat(Color(0.05, 0.05, 0.05), 0.6)
+	var squares := int(road_width / 0.5)
+	for row in 2:
+		for i in squares:
+			var x := -road_width * 0.5 + 0.25 + i * 0.5
+			MeshKit.box(root, Vector3(0.5, 0.02, 0.5), Vector3(x, 0.01, -0.25 + row * 0.5), white if (i + row) % 2 == 0 else black)
+	return root
+
+
+## A string of little triangular flags (bunting), `length` metres along -Z.
+static func bunting(rng: RandomNumberGenerator, length: float, height: float) -> Node3D:
+	var root := Node3D.new()
+	var cols := [Color(0.9, 0.15, 0.1), Color(0.95, 0.85, 0.2), Color(0.15, 0.45, 0.9), Color(0.95, 0.95, 0.95), Color(0.2, 0.7, 0.3)]
+	var n := int(length / 0.7)
+	for i in n:
+		var z := -length * 0.5 + i * 0.7
+		var sag := sin(float(i) / float(maxi(n - 1, 1)) * PI) * 0.6
+		var flag := MeshKit.box(root, Vector3(0.02, 0.35, 0.4), Vector3(0, height - sag - 0.2, z), MeshKit.mat(cols[rng.randi() % cols.size()], 0.8), Vector3(0, 0, 0))
+		flag.rotation.x = deg_to_rad(45)
+	return root

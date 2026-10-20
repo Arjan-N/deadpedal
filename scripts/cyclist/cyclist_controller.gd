@@ -40,6 +40,23 @@ var distance_limit: float = INF
 ## Set when the rider is caught by the horde.
 var is_caught: bool = false
 
+# Criterium (set by RaceManager):
+## Computer rider: effort comes from bot_effort instead of the cycling input.
+var is_bot: bool = false
+var bot_effort: float = 0.0
+## Shown as watts for computer riders.
+var bot_ftp: float = 250.0
+## Slipstream bonus decided by the race (gap-dependent); -1 = the usual
+## on/off slipstream behind other riders.
+var draft_bonus_override: float = -1.0
+## Sprint battery (effort-seconds above threshold). capacity 0 = no battery.
+var battery_capacity: float = 0.0
+var battery: float = 0.0
+var battery_recharge: float = 0.5
+var battery_threshold: float = RideModel.FTP_EFFORT
+## The effort the rider asked for before the battery capped it.
+var requested_effort: float = 0.0
+
 var _send_timer: float = 0.0
 var _net_distance: float = 0.0
 var _net_speed: float = 0.0
@@ -54,7 +71,7 @@ func _ready() -> void:
 	model.build(jersey_color)
 	name_tag.text = player_name
 	name_tag.modulate = jersey_color.lightened(0.3)
-	name_tag.visible = not is_local()
+	name_tag.visible = is_bot or not is_local()
 	_net_distance = distance
 	_apply_transform(0.0)
 
@@ -63,11 +80,16 @@ func is_local() -> bool:
 	return is_multiplayer_authority()
 
 
+## Simulated on this machine (the local player, or a computer rider).
+func is_simulated_here() -> bool:
+	return is_bot or is_local()
+
+
 func _process(delta: float) -> void:
-	if is_local():
+	if is_simulated_here():
 		_simulate(delta)
 		_send_timer -= delta
-		if _send_timer <= 0.0 and multiplayer.has_multiplayer_peer() and can_ride:
+		if _send_timer <= 0.0 and multiplayer.has_multiplayer_peer() and can_ride and not is_bot:
 			_send_timer = 1.0 / network_send_rate
 			_net_state.rpc(distance, speed, power_watts, effort, cadence)
 	else:
@@ -77,14 +99,29 @@ func _process(delta: float) -> void:
 
 
 func _simulate(delta: float) -> void:
-	power_watts = CyclingInputManager.get_power_watts()
-	effort = CyclingInputManager.get_effort()
-	cadence = CyclingInputManager.get_cadence_rpm()
+	if is_bot:
+		effort = bot_effort
+		power_watts = bot_effort * bot_ftp * 1.6
+		cadence = 88.0 + bot_effort * 12.0 if bot_effort > 0.05 else 0.0
+	else:
+		power_watts = CyclingInputManager.get_power_watts()
+		effort = CyclingInputManager.get_effort()
+		cadence = CyclingInputManager.get_cadence_rpm()
+	requested_effort = effort
+	if battery_capacity > 0.0:
+		# Above all-out (effort 1) is no faster, so it doesn't cost extra either.
+		effort = RideModel.cap_effort(minf(effort, 1.0), battery, battery_threshold)
+		if can_ride:
+			battery = RideModel.step_battery(battery, effort, delta, battery_capacity, battery_recharge, battery_threshold)
 	if not can_ride or is_caught:
 		speed = move_toward(speed, 0.0, 6.0 * delta)
 		return
-	is_drafting = _check_drafting()
-	speed = ride_model.step_speed(speed, effort, delta, is_drafting)
+	if draft_bonus_override >= 0.0:
+		is_drafting = draft_bonus_override > 0.005
+		speed = ride_model.step_speed(speed, effort, delta, is_drafting, draft_bonus_override)
+	else:
+		is_drafting = _check_drafting()
+		speed = ride_model.step_speed(speed, effort, delta, is_drafting)
 	# Brake smoothly for a closed gate: never faster than what can stop in time.
 	var remaining := distance_limit - distance
 	if remaining < 60.0:

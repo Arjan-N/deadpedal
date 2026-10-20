@@ -15,7 +15,12 @@ extends Node
 ## Overall level of the riding sounds (tyres, drivetrain, freewheel).
 @export var riding_volume_db: float = -6.0
 
-var mission: MissionManager
+## Background ambience loop ("" = none, e.g. the sunny criterium).
+var ambience_id: String = "ambience_loop"
+var ambience_volume_db: float = -20.0
+## The mission or race being played (needs `local_cyclist`; zombie sounds
+## also use `zombies` when it has one).
+var mission: Node
 
 var _loops: Dictionary = {}  # id -> AudioStreamPlayer
 var _oneshots: Array[AudioStreamPlayer] = []
@@ -26,10 +31,12 @@ var _ratchet_timer: float = 0.0
 var _warned: Dictionary = {}
 
 
-func setup(p_mission: MissionManager) -> void:
+func setup(p_mission: Node) -> void:
 	mission = p_mission
 	for id in ["wind_loop", "tyre_loop", "drivetrain_loop", "freewheel_loop", "horde_loop", "ambience_loop"]:
 		_loops[id] = _make_loop(id)
+	if ambience_id != "" and not _loops.has(ambience_id):
+		_loops[ambience_id] = _make_loop(ambience_id)
 	for i in 6:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
@@ -51,7 +58,7 @@ func _exit_tree() -> void:
 
 ## Call every frame. danger 0..1, gate_effort = team effort per second.
 func update(delta: float, danger: float, gate_effort: float) -> void:
-	var me := mission.local_cyclist
+	var me: CyclistController = mission.local_cyclist
 	var speed := me.speed if me else 0.0
 	var cadence := me.cadence if me else 0.0
 	var speed01 := clampf(speed / 16.0, 0.0, 1.0)
@@ -66,7 +73,9 @@ func update(delta: float, danger: float, gate_effort: float) -> void:
 	_set_loop("freewheel_loop", riding_volume_db - 16.0, 0.7 + speed01 * 0.8, moving and not pedalling)
 
 	# Threat layer.
-	_set_loop("ambience_loop", -20.0, 1.0, true)
+	_set_loop("ambience_loop", ambience_volume_db, 1.0, ambience_id == "ambience_loop")
+	if ambience_id != "" and ambience_id != "ambience_loop":
+		_set_loop(ambience_id, ambience_volume_db, 1.0, true)
 	_set_loop("horde_loop", lerpf(-30.0, -4.0, danger), 0.95 + danger * 0.1, danger > 0.01)
 
 	if danger > 0.05:

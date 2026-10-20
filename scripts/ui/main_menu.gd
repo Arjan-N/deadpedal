@@ -91,6 +91,8 @@ func _build() -> void:
 	var best := HighScores.best()
 	if not best.is_empty():
 		_label(_main_box, "   Best endless run: %.2f km  (score %d)" % [float(best["distance"]) / 1000.0, int(best["score"])], 20, COL_DIM)
+	_button(_main_box, "CRITERIUM (POINTS RACE)", _on_solo_race)
+	_build_race_settings(_main_box)
 	_button(_main_box, "HOST GAME", _on_host)
 	var join_row := HBoxContainer.new()
 	_main_box.add_child(join_row)
@@ -176,6 +178,37 @@ func _build() -> void:
 	help.autowrap_mode = TextServer.AUTOWRAP_OFF
 
 
+## Criterium options under its button: points to win, opponents, strength.
+func _build_race_settings(parent: Node) -> void:
+	RaceSettings.load_settings()
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	parent.add_child(row)
+	var options := [
+		["First to", RaceSettings.POINT_OPTIONS.map(func(v: int) -> String: return "%d points" % v),
+			RaceSettings.POINT_OPTIONS.find(RaceSettings.points_to_win),
+			func(i: int) -> void: RaceSettings.points_to_win = RaceSettings.POINT_OPTIONS[i]],
+		["Riders", RaceSettings.RIDER_OPTIONS.map(func(v: int) -> String: return "%d rivals" % v),
+			RaceSettings.RIDER_OPTIONS.find(RaceSettings.opponents),
+			func(i: int) -> void: RaceSettings.opponents = RaceSettings.RIDER_OPTIONS[i]],
+		["Rivals", RaceSettings.DIFFICULTY_NAMES, RaceSettings.difficulty,
+			func(i: int) -> void: RaceSettings.difficulty = i as RaceSettings.Difficulty],
+	]
+	for o: Array in options:
+		var pick := OptionButton.new()
+		for item: String in o[1]:
+			pick.add_item(item)
+		pick.select(maxi(int(o[2]), 0))
+		pick.tooltip_text = o[0]
+		pick.custom_minimum_size = Vector2(134, 40)
+		pick.add_theme_font_size_override("font_size", 18)
+		var apply: Callable = o[3]
+		pick.item_selected.connect(func(i: int) -> void:
+			apply.call(i)
+			RaceSettings.save_settings())
+		row.add_child(pick)
+
+
 func _process(_delta: float) -> void:
 	# Live input status, so you can check the trainer works before riding.
 	var src := CyclingInputManager.source
@@ -213,6 +246,11 @@ func _on_solo() -> void:
 func _on_solo_endless() -> void:
 	_save_profile()
 	MultiplayerManager.start_solo(MultiplayerManager.MODE_ENDLESS)
+
+
+func _on_solo_race() -> void:
+	_save_profile()
+	MultiplayerManager.start_solo(MultiplayerManager.MODE_RACE)
 
 
 func _on_host() -> void:
