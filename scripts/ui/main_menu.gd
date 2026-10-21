@@ -193,6 +193,8 @@ func _build_race_settings(parent: Node) -> void:
 			func(i: int) -> void: RaceSettings.opponents = RaceSettings.RIDER_OPTIONS[i]],
 		["Rivals", RaceSettings.DIFFICULTY_NAMES, RaceSettings.difficulty,
 			func(i: int) -> void: RaceSettings.difficulty = i as RaceSettings.Difficulty],
+		["Draft help", RaceSettings.DRAFT_ASSIST_NAMES, RaceSettings.draft_assist,
+			func(i: int) -> void: RaceSettings.draft_assist = i],
 	]
 	for o: Array in options:
 		var pick := OptionButton.new()

@@ -219,7 +219,10 @@ func _process(delta: float) -> void:
 	# Shelter.
 	match race.shelter_state(me):
 		"SHELTERED":
-			_shelter.text = "SHELTERED -%d%% wind  behind %s" % [roundi(me.draft_bonus_override * 100.0), me.drafting_behind]
+			if me.wheel_locked:
+				_shelter.text = "ON %s'S WHEEL  -%d%% wind" % [me.drafting_behind.to_upper(), roundi(me.draft_bonus_override * 100.0)]
+			else:
+				_shelter.text = "SHELTERED -%d%% wind  behind %s" % [roundi(me.draft_bonus_override * 100.0), me.drafting_behind]
 			_shelter.label_settings.font_color = COL_SHELTER
 		"DROPPED":
 			_shelter.text = "DROPPED - alone in the wind"

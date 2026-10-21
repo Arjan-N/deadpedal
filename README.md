@@ -119,6 +119,12 @@ to 5 points takes about 10–15 minutes, to 10 points 20–30.
 - **Slipstream:** right behind someone (within ~1.5 m) you have 35% less air
   drag, fading to nothing by 8 m (a bit more deeper in a line). The HUD shows
   *SHELTERED -35% wind behind Dan*, *IN THE WIND* or *DROPPED*.
+- **Draft help** (title screen: off / normal / strong, default normal), like
+  Zwift's "sticky" draft: when you're right behind someone and your power is
+  roughly what it takes to follow (normal: within about 30%), you're held on
+  their wheel, and a little too much power touches the brakes instead of
+  riding past. Surge clearly to come past, ease off clearly to drop back. The
+  HUD shows *ON DAN'S WHEEL* while it's holding you.
 - **Sprint battery:** everyone (you and the computer riders) has one. Riding
   above your FTP drains it; easy riding refills it. When it's empty you can't
   go above FTP until it recovers, so you can't win every lap. Pick your laps.
@@ -369,7 +375,12 @@ godot --headless --path . -- --solo --mode=endless --seed=7 --autopilot=150 --au
 godot --headless --path . -- --solo --mode=race --seed=3 --race-points=5 --autopilot=150 --autopilot-race=sprinter --timescale=10 --exit-on-results
 ```
 
-`tests/run_all_tests.sh` runs all of the above. Other options are listed at the
+`tests/run_all_tests.sh` runs all of the above (about 4 minutes; add
+`--quick` for unit tests plus one short run per mode, under a minute). It runs
+tests in parallel, and single-player runs use Godot's `--fixed-fps 60`: every
+frame is exactly 1/60 s of game time and the game runs as fast as the computer
+allows, e.g. `godot --headless --fixed-fps 60 --path . -- --solo --mode=race
+...`. Only the multiplayer tests run in real time. Other options are listed at the
 top of `scripts/autoload/dev_tools.gd`. For example, `-- --solo` skips the menu
 when launching from a terminal.
 

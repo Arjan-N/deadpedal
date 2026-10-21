@@ -354,6 +354,15 @@ func test_slipstream_and_battery() -> void:
 	check(is_equal_approx(b, 10.0), "easy riding refills it (to capacity)")
 	check(RideModel.cap_effort(1.0, 0.0) == RideModel.FTP_EFFORT, "empty battery: capped at FTP")
 	check(RideModel.cap_effort(1.0, 3.0) == 1.0, "with battery left: full effort")
+	var A := CyclistController.AssistAction
+	check(CyclistController.draft_assist_action(1, 1.0, 1.0) == A.HOLD, "draft assist holds you on the wheel at matching effort")
+	check(CyclistController.draft_assist_action(1, 0.75, 1.0) == A.HOLD, "...and when easing off a little")
+	check(CyclistController.draft_assist_action(1, 0.5, 1.0) == A.NONE, "easing off a lot drops you")
+	check(CyclistController.draft_assist_action(1, 1.45, 1.0) == A.BRAKE, "a bit too much: brakes touched, not past")
+	check(CyclistController.draft_assist_action(1, 2.0, 1.0) == A.NONE, "a real surge takes you past")
+	check(CyclistController.draft_assist_action(0, 1.0, 1.0) == A.NONE, "off means off")
+	check(CyclistController.draft_assist_action(1, 1.0, 6.0) == A.NONE, "no help when you're not on a wheel")
+	check(CyclistController.draft_assist_action(2, 0.6, 1.0) == A.HOLD and CyclistController.draft_assist_action(1, 0.6, 1.0) == A.NONE, "strong holds you more firmly than normal")
 
 
 func test_sound_bank() -> void:

@@ -57,6 +57,29 @@ var draft_bonus_override: float = -1.0
 var physics: RidePhysics
 ## Computer riders: extra braking (m/s^2) to avoid riding into a wheel.
 var bot_brake: float = 0.0
+## Criterium draft assist for your rider, like Zwift's "sticky" draft:
+## 0 = off, 1 = normal, 2 = strong. When you're right behind someone and your
+## power is roughly what it takes to follow, you're held on their wheel; a bit
+## too much and the brakes are touched. Surge clearly to pass, ease off
+## clearly to drop back.
+var draft_assist: int = 0
+## The wheel just ahead on the circuit and the gap to it (set by the race).
+var wheel: CyclistController
+var wheel_gap: float = INF
+## The assist is holding you on the wheel (shown on the HUD).
+var wheel_locked: bool = false
+
+## Draft assist per level: effort (relative to what the wheel needs) that
+## still counts as following [low, high]; up to this much is braked rather
+## than passing; how firmly you're held (m/s^2).
+const ASSIST_BAND: Array[Vector2] = [Vector2.ZERO, Vector2(0.7, 1.3), Vector2(0.55, 1.5)]
+const ASSIST_BRAKE_UP_TO: Array[float] = [0.0, 1.6, 1.9]
+const ASSIST_PULL: Array[float] = [0.0, 1.0, 2.0]
+const ASSIST_BRAKE := 0.8
+## Gaps (m) where the assist works, and the gap it holds you at.
+const ASSIST_RANGE := Vector2(0.3, 4.0)
+const ASSIST_HOLD_GAP := 1.0
+enum AssistAction { NONE, HOLD, BRAKE }
 ## Sprint battery (effort-seconds above threshold). capacity 0 = no battery.
 var battery_capacity: float = 0.0
 var battery: float = 0.0
@@ -157,6 +180,7 @@ func _simulate(delta: float) -> void:
 	if physics:
 		is_drafting = draft_bonus_override > 0.005
 		speed = physics.step_speed(speed, effort, delta, maxf(draft_bonus_override, 0.0), bot_brake if is_bot else 0.0)
+		_apply_draft_assist(delta)
 	elif draft_bonus_override >= 0.0:
 		is_drafting = draft_bonus_override > 0.005
 		speed = ride_model.step_speed(speed, effort, delta, is_drafting, draft_bonus_override)
@@ -187,6 +211,34 @@ func _check_drafting() -> bool:
 			return true
 	drafting_behind = ""
 	return false
+
+
+## What the draft assist does at a given level, effort ratio (your effort /
+## the effort the wheel needs) and gap.
+static func draft_assist_action(level: int, effort_ratio: float, gap: float) -> AssistAction:
+	if level <= 0 or gap < ASSIST_RANGE.x or gap > ASSIST_RANGE.y:
+		return AssistAction.NONE
+	var band := ASSIST_BAND[level]
+	if effort_ratio >= band.x and effort_ratio <= band.y:
+		return AssistAction.HOLD
+	if effort_ratio > band.y and effort_ratio <= ASSIST_BRAKE_UP_TO[level] and gap < 1.5:
+		return AssistAction.BRAKE
+	return AssistAction.NONE
+
+
+func _apply_draft_assist(delta: float) -> void:
+	wheel_locked = false
+	if draft_assist <= 0 or wheel == null or wheel.speed < 2.0:
+		return
+	var need := physics.effort_for_speed(wheel.speed, maxf(draft_bonus_override, 0.0))
+	match draft_assist_action(draft_assist, effort / maxf(need, 0.05), wheel_gap):
+		AssistAction.HOLD:
+			var target := wheel.speed + clampf((wheel_gap - ASSIST_HOLD_GAP) * 0.5, -1.0, 1.0)
+			speed = move_toward(speed, target, ASSIST_PULL[draft_assist] * delta)
+			wheel_locked = true
+		AssistAction.BRAKE:
+			if speed > wheel.speed:
+				speed = move_toward(speed, wheel.speed, ASSIST_BRAKE * delta)
 
 
 ## The effort that holds `speed` with this much slipstream.

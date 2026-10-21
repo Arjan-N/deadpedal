@@ -127,6 +127,8 @@ func _apply_dev_options() -> void:
 		RaceSettings.points_to_win = int(o["race-points"])
 	if o.has("race-opponents"):
 		RaceSettings.opponents = int(o["race-opponents"])
+	if o.has("race-draft-assist"):
+		RaceSettings.draft_assist = clampi(int(o["race-draft-assist"]), 0, 2)
 	if o.has("race-difficulty"):
 		RaceSettings.difficulty = clampi(int(o["race-difficulty"]), 0, 2) as RaceSettings.Difficulty
 
@@ -158,6 +160,7 @@ func _spawn_riders() -> void:
 		if id == PLAYER_ID:
 			c.player_name = CyclingInputManager.rider_name
 			c.jersey_color = JERSEYS[0]
+			c.draft_assist = RaceSettings.draft_assist
 			local_cyclist = c
 		else:
 			var personality: RaceBot.Personality = FIELD[bot_index % FIELD.size()]
@@ -278,6 +281,9 @@ func _update_order() -> void:
 				best_gap = gap
 				best = a
 		ahead_on_track[c.peer_id] = [best, best_gap]
+	if local_cyclist:
+		local_cyclist.wheel = ahead_on_track[local_cyclist.peer_id][0]
+		local_cyclist.wheel_gap = ahead_on_track[local_cyclist.peer_id][1]
 
 
 ## How far `a` is ahead of `b` on the circuit (0..lap length).

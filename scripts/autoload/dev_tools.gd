@@ -24,7 +24,8 @@ extends Node
 ##                          survivors, crates and exhausted companions, and
 ##                          sprint past screamers
 ##   --mode=race            (with --solo) the criterium; also --race-points=N,
-##                          --race-opponents=N, --race-difficulty=0|1|2 and
+##                          --race-opponents=N, --race-difficulty=0|1|2,
+##                          --race-draft-assist=0|1|2 and
 ##                          --autopilot-sprint-at=M (metres before the line),
 ##                          --autopilot-race=sprinter|diesel|... (you race
 ##                          like that computer rider), --log-race
@@ -37,7 +38,11 @@ extends Node
 ##                          success, 2 = failure
 ##   --replays=N            (with --exit-on-results) the host presses Replay
 ##                          N times before quitting - tests mission restart
-##   --quit-after=S         quit after S seconds no matter what (safety net)
+##   --quit-after=S         quit after S real (wall-clock) seconds no matter
+##                          what (safety net); exit code 3
+##   --stop-at=S            quit after S seconds of mission time (exit 3);
+##                          reproducible with Godot's --fixed-fps 60, which
+##                          runs the game as fast as the computer allows
 
 var options: Dictionary = {}
 
@@ -47,7 +52,7 @@ var _shots: Array = []
 var _shot_index: int = 0
 var _exit_pending := false
 var _auto_start_players: int = 0
-var _real_time: float = 0.0
+var _start_msec: int = Time.get_ticks_msec()
 var _results_seen: int = 0
 ## Autopilot sprint reserve (joules above FTP, like a rider's W'), so test
 ## riders can't sprint forever.
@@ -101,8 +106,7 @@ func _start_mode() -> void:
 func _process(delta: float) -> void:
 	if options.is_empty():
 		return
-	_real_time += delta / maxf(Engine.time_scale, 0.001)
-	if options.has("quit-after") and _real_time > float(options["quit-after"]):
+	if options.has("quit-after") and (Time.get_ticks_msec() - _start_msec) / 1000.0 > float(options["quit-after"]):
 		print("[DevTools] quit-after reached")
 		get_tree().quit(3)
 		return
@@ -162,7 +166,15 @@ func _process(delta: float) -> void:
 	_maybe_screenshot()
 
 
+func _check_stop_at() -> void:
+	if options.has("stop-at") and _mission_time > float(options["stop-at"]) and not _exit_pending:
+		_exit_pending = true
+		print("[DevTools] stop-at reached")
+		get_tree().quit(3)
+
+
 func _maybe_screenshot() -> void:
+	_check_stop_at()
 	if options.has("screenshot") and _shot_index < _shots.size() and _mission_time >= _shots[_shot_index]:
 		var path := String(options["screenshot"])
 		if path.contains("%d"):
@@ -228,8 +240,8 @@ func _on_race_finished(results: Dictionary) -> void:
 	var points := []
 	for s: Dictionary in results.get("standings", []):
 		points.append("%s:%d" % [s["name"], s["points"]])
-	print("[DevTools] RESULT race success=%s winner=%s laps=%d time=%.1f points=%s" % [results.get("success"), results.get("winner"),
-		results.get("laps", 0), results.get("time", 0.0), ", ".join(points)])
+	print("[DevTools] RESULT race success=%s winner=%s laps=%d time=%.1f in_wind=%d%% points=%s" % [results.get("success"), results.get("winner"),
+		results.get("laps", 0), results.get("time", 0.0), roundi(float(results.get("time_in_wind", 0.0)) * 100.0), ", ".join(points)])
 	await get_tree().create_timer(1.5 * Engine.time_scale).timeout
 	get_tree().quit(0 if results.get("success", false) else 2)
 
