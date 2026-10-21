@@ -248,6 +248,14 @@ func effort_for_speed(target_speed: float, slipstream: float = 0.0) -> float:
 	return ride_model.effort_for_speed(target_speed, slipstream)
 
 
+## Extra effort needed to accelerate at `accel` (m/s^2) at the current speed
+## (0 for the arcade model, where speed follows effort directly).
+func effort_to_accelerate(accel: float) -> float:
+	if physics == null:
+		return 0.0
+	return physics.mass_kg * accel * maxf(speed, physics.min_drive_speed) / (1.6 * physics.reference_ftp)
+
+
 ## The steady speed an effort gives, riding alone.
 func speed_for_effort(e: float) -> float:
 	return physics.speed_for_effort(e) if physics else ride_model.target_speed(e)

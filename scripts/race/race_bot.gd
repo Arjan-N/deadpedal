@@ -144,14 +144,21 @@ func decide(delta: float, ahead: CyclistController, gap: float, lead_gap: float,
 			return clampf((chase_effort if chasing else front_effort) + _noise, 0.03, 1.0)
 		# Sit on the wheel ahead: match their speed, closing any gap.
 		var desired := _seen_speed + clampf((gap - wheel_gap) * 0.6, -2.5, 3.0)
-		effort = rider.effort_for_speed(desired, rider.draft_bonus_override) + 0.15 * (desired - rider.speed)
+		# The power to hold that speed, plus the power to accelerate (or ease
+		# off) towards it - with real inertia, closing a gap takes a hard
+		# effort, not a slightly harder one.
+		var accel := clampf((desired - rider.speed) * 0.8, -1.0, 1.2)
+		effort = rider.effort_for_speed(desired, rider.draft_bonus_override) + rider.effort_to_accelerate(accel) \
+			+ 0.15 * (desired - rider.speed)
 		# Touch the brakes rather than ride into the wheel ahead.
 		if gap < wheel_gap * 0.6 and rider.speed > _seen_speed:
 			rider.bot_brake = 1.5
 		# How hard they'll chase a gap.
 		var cap := chase_effort + (0.1 if contesting else 0.0)
 		if gap < 4.0:
-			cap = 1.0  # just following
+			cap = 1.3  # just following (surges included)
+		elif gap < 15.0 and battery > 0.15:
+			cap = 1.2  # just lost the wheel: a short hard effort to get back on
 		effort = minf(effort, cap)
 		# A wheelsucker never wants to be the one closing a gap.
 		if personality == Personality.WHEELSUCKER and gap > 8.0 and not contesting:
