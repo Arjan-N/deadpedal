@@ -125,6 +125,9 @@ var _time: float = 0.0
 
 func setup(p_route: Route, wanderers_from: float, wanderers_to: float) -> void:
 	route = p_route
+	# Surges and runners follow the world seed (random per run, but a fixed
+	# --seed gives the same run every time - useful for tests).
+	_rng.seed = random_seed * 7919 + MultiplayerManager.mission_seed
 	var vis_rng := RandomNumberGenerator.new()
 	vis_rng.seed = random_seed
 	for i in max_horde_models:

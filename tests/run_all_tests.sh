@@ -88,9 +88,10 @@ test_race() {
 	fi
 }
 
-# ...and against "harder" rivals it loses (exit code 2).
+# ...and against "harder" rivals it loses (exit code 2) - with draft help off,
+# which would otherwise give it an edge the rivals don't have.
 test_race_hard() {
-	"${SOLO[@]}" -- --solo --mode=race --seed=11 --race-points=5 --race-difficulty=2 --autopilot=150 --autopilot-race=sprinter --exit-on-results --quit-after=200 > "$LOG_DIR/race_hard.log" 2>&1
+	"${SOLO[@]}" -- --solo --mode=race --seed=11 --race-points=5 --race-difficulty=2 --race-draft-assist=0 --autopilot=150 --autopilot-race=sprinter --exit-on-results --quit-after=200 > "$LOG_DIR/race_hard.log" 2>&1
 	result "criterium: harder rivals beat an equal-strength rider" 2 $?
 }
 

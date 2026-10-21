@@ -375,7 +375,7 @@ godot --headless --path . -- --solo --mode=endless --seed=7 --autopilot=150 --au
 godot --headless --path . -- --solo --mode=race --seed=3 --race-points=5 --autopilot=150 --autopilot-race=sprinter --timescale=10 --exit-on-results
 ```
 
-`tests/run_all_tests.sh` runs all of the above (about 4 minutes; add
+`tests/run_all_tests.sh` runs all of the above (about 3 minutes; add
 `--quick` for unit tests plus one short run per mode, under a minute). It runs
 tests in parallel, and single-player runs use Godot's `--fixed-fps 60`: every
 frame is exactly 1/60 s of game time and the game runs as fast as the computer
