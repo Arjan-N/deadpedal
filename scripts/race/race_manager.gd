@@ -31,22 +31,28 @@ const LANE_SLOTS: Array[float] = [0.0, -1.2, 1.2, -2.4, 2.4, -3.4, 3.4]
 @export_group("Points")
 @export var bell_every: int = 5
 @export var bell_points: int = 2
+## Real-world riding physics (mass, rolling resistance, air drag). Its
+## reference FTP is set to yours, so you ride at your real watts.
+@export var physics: RidePhysics
 @export_group("Slipstream")
-## Biggest slipstream bonus (speed for the same effort), right on a wheel...
-@export var max_draft_bonus: float = 0.2
+## Air drag saved right on a wheel (0.35 = 35% less, like a real bunch)...
+@export var max_draft_bonus: float = 0.35
 ## ...up to this gap (m)...
 @export var full_draft_gap: float = 1.5
 ## ...fading to nothing at this gap.
 @export var draft_range: float = 8.0
 ## Extra shelter when the rider ahead is sheltered too (deeper in the line).
-@export var chain_bonus: float = 0.03
+@export var chain_bonus: float = 0.05
 ## More than this far behind the rider ahead = dropped (alone in the wind).
 @export var dropped_gap: float = 15.0
 @export_group("Battery")
-## Battery size in effort-seconds above FTP (a full sprint uses ~0.375/s).
-@export var battery_capacity: float = 10.0
+## Battery size in effort-seconds above FTP (effort 1 = 160% FTP). A sprint
+## at 2.5x FTP uses about 1 per second.
+@export var battery_capacity: float = 30.0
+## Hardest effort that counts: 2 = 320% of FTP (a real sprint).
+@export var max_effort: float = 2.0
 ## How fast riding below FTP refills it (fraction of the effort below FTP).
-@export var battery_recharge: float = 0.5
+@export var battery_recharge: float = 0.7
 
 var stage: Stage = Stage.COUNTDOWN
 var elapsed: float = 0.0
@@ -127,6 +133,9 @@ func _apply_dev_options() -> void:
 
 func _spawn_riders() -> void:
 	var seed_value := MultiplayerManager.mission_seed
+	if physics == null:
+		physics = RidePhysics.new()
+	physics.reference_ftp = CyclingInputManager.rider_ftp_watts
 	var count := RaceSettings.opponents + 1
 	# The player starts in the middle of the grid.
 	var player_slot := count / 2
@@ -143,6 +152,9 @@ func _spawn_riders() -> void:
 		c.battery = battery_capacity
 		c.battery_recharge = battery_recharge
 		c.draft_bonus_override = 0.0
+		c.physics = physics
+		c.max_effort = max_effort
+		c.bot_ftp = physics.reference_ftp
 		if id == PLAYER_ID:
 			c.player_name = CyclingInputManager.rider_name
 			c.jersey_color = JERSEYS[0]
@@ -445,7 +457,7 @@ func _update_stats(delta: float) -> void:
 	_time_racing += delta
 	if me.draft_bonus_override <= 0.005:
 		_time_in_wind += delta
-	_max_power = maxf(_max_power, me.power_watts)
+	_max_power = maxf(_max_power, me.power_avg)
 	if metres_to_line(me) < 200.0:
 		_best_sprint = maxf(_best_sprint, me.speed)
 

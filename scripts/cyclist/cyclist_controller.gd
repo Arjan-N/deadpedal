@@ -26,6 +26,9 @@ var route: Route
 var distance: float = 0.0
 var speed: float = 0.0
 var power_watts: float = 0.0
+## Power averaged over the last 3 seconds, for display. Trainers report
+## power in noisy bursts; cycling apps show a 3 s average for that reason.
+var power_avg: float = 0.0
 var effort: float = 0.0
 var cadence: float = -1.0
 var max_speed_reached: float = 0.0
@@ -46,18 +49,31 @@ var is_bot: bool = false
 var bot_effort: float = 0.0
 ## Shown as watts for computer riders.
 var bot_ftp: float = 250.0
-## Slipstream bonus decided by the race (gap-dependent); -1 = the usual
-## on/off slipstream behind other riders.
+## Slipstream decided by the race (gap-dependent); -1 = the usual on/off
+## slipstream behind other riders. With `physics` it's the fraction of air
+## drag saved, otherwise a speed bonus.
 var draft_bonus_override: float = -1.0
+## Real-world physics instead of ride_model (the criterium).
+var physics: RidePhysics
+## Computer riders: extra braking (m/s^2) to avoid riding into a wheel.
+var bot_brake: float = 0.0
 ## Sprint battery (effort-seconds above threshold). capacity 0 = no battery.
 var battery_capacity: float = 0.0
 var battery: float = 0.0
 var battery_recharge: float = 0.5
 var battery_threshold: float = RideModel.FTP_EFFORT
+## Highest effort that counts (1 = 160% FTP). The criterium allows more,
+## for real sprints.
+var max_effort: float = 1.0
 ## The effort the rider asked for before the battery capped it.
 var requested_effort: float = 0.0
 
 var _send_timer: float = 0.0
+const POWER_AVG_BUCKETS := 30  # 30 x 0.1 s = 3 s
+var _power_buckets := PackedFloat32Array()
+var _power_bucket_index: int = 0
+var _bucket_energy: float = 0.0
+var _bucket_time: float = 0.0
 var _net_distance: float = 0.0
 var _net_speed: float = 0.0
 var _net_age: float = 0.0
@@ -95,7 +111,25 @@ func _process(delta: float) -> void:
 	else:
 		_follow_network(delta)
 	max_speed_reached = maxf(max_speed_reached, speed)
+	_update_power_avg(delta)
 	_apply_transform(delta)
+
+
+func _update_power_avg(delta: float) -> void:
+	if _power_buckets.is_empty():
+		_power_buckets.resize(POWER_AVG_BUCKETS)
+		_power_buckets.fill(power_watts)
+	_bucket_energy += power_watts * delta
+	_bucket_time += delta
+	if _bucket_time >= 0.1:
+		_power_buckets[_power_bucket_index] = _bucket_energy / _bucket_time
+		_power_bucket_index = (_power_bucket_index + 1) % POWER_AVG_BUCKETS
+		_bucket_energy = 0.0
+		_bucket_time = 0.0
+		var total := 0.0
+		for p in _power_buckets:
+			total += p
+		power_avg = total / POWER_AVG_BUCKETS
 
 
 func _simulate(delta: float) -> void:
@@ -107,16 +141,23 @@ func _simulate(delta: float) -> void:
 		power_watts = CyclingInputManager.get_power_watts()
 		effort = CyclingInputManager.get_effort()
 		cadence = CyclingInputManager.get_cadence_rpm()
+		# Input effort tops out at 1 (160% FTP); the criterium counts real
+		# sprint power beyond that.
+		if max_effort > 1.0 and effort >= 1.0:
+			effort = power_watts / (CyclingInputManager.rider_ftp_watts * 1.6)
 	requested_effort = effort
 	if battery_capacity > 0.0:
-		# Above all-out (effort 1) is no faster, so it doesn't cost extra either.
-		effort = RideModel.cap_effort(minf(effort, 1.0), battery, battery_threshold)
+		# Above max_effort is no faster, so it doesn't cost extra either.
+		effort = RideModel.cap_effort(minf(effort, max_effort), battery, battery_threshold)
 		if can_ride:
 			battery = RideModel.step_battery(battery, effort, delta, battery_capacity, battery_recharge, battery_threshold)
 	if not can_ride or is_caught:
 		speed = move_toward(speed, 0.0, 6.0 * delta)
 		return
-	if draft_bonus_override >= 0.0:
+	if physics:
+		is_drafting = draft_bonus_override > 0.005
+		speed = physics.step_speed(speed, effort, delta, maxf(draft_bonus_override, 0.0), bot_brake if is_bot else 0.0)
+	elif draft_bonus_override >= 0.0:
 		is_drafting = draft_bonus_override > 0.005
 		speed = ride_model.step_speed(speed, effort, delta, is_drafting, draft_bonus_override)
 	else:
@@ -146,6 +187,18 @@ func _check_drafting() -> bool:
 			return true
 	drafting_behind = ""
 	return false
+
+
+## The effort that holds `speed` with this much slipstream.
+func effort_for_speed(target_speed: float, slipstream: float = 0.0) -> float:
+	if physics:
+		return physics.effort_for_speed(target_speed, slipstream)
+	return ride_model.effort_for_speed(target_speed, slipstream)
+
+
+## The steady speed an effort gives, riding alone.
+func speed_for_effort(e: float) -> float:
+	return physics.speed_for_effort(e) if physics else ride_model.target_speed(e)
 
 
 ## Owner only: knocked off your rhythm (a runner clawed at you).

@@ -305,7 +305,7 @@ func _process(delta: float) -> void:
 
 	# Ride stats.
 	_speed.text = "%d" % roundi(me.speed * 3.6)
-	_power.text = "%d W" % roundi(me.power_watts)
+	_power.text = "%d W" % roundi(me.power_avg)
 	_effort_bar.value = me.effort
 	_effort_label.text = "EFFORT %d%%" % roundi(me.effort * 100.0)
 	_cadence.text = "%d rpm" % roundi(me.cadence) if me.cadence >= 0.0 else ""

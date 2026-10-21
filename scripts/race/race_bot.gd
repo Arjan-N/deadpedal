@@ -34,6 +34,8 @@ var wheel_gap: float = 1.0
 ## How long they take to respond when the wheel ahead speeds up (s). A quick
 ## attack can open a gap on a slow reactor.
 var reaction_time: float = 0.8
+## Effort in the sprint for the line (1 = 160% FTP).
+var sprint_effort: float = 1.6
 ## Length of a lap (set by the race).
 var lap_length: float = 560.0
 
@@ -63,6 +65,7 @@ func setup(p_personality: Personality, p_rider: CyclistController, seed_value: i
 	chase_effort = p[5]
 	wheel_gap = _rng.randf_range(0.8, 1.6)
 	reaction_time = _rng.randf_range(0.6, 1.2)
+	sprint_effort = (1.75 if personality == Personality.SPRINTER else 1.5) * _rng.randf_range(0.95, 1.05)
 	if personality == Personality.DIESEL:
 		reaction_time *= 1.4  # slow to respond, but relentless once going
 	match difficulty:
@@ -70,10 +73,12 @@ func setup(p_personality: Personality, p_rider: CyclistController, seed_value: i
 			# Mistimed sprints, slower reactions and less in the tank.
 			sprint_distance *= _rng.randf_range(0.7, 1.5)
 			chase_effort -= 0.06
+			sprint_effort -= 0.15
 			reaction_time *= 1.6
 		RaceSettings.Difficulty.HARDER:
 			chase_effort += 0.05
 			reaction_time *= 0.6
+			sprint_effort += 0.1
 
 
 ## Called as this rider starts a new lap.
@@ -112,7 +117,7 @@ func decide(delta: float, ahead: CyclistController, gap: float, lead_gap: float,
 	var effort: float
 	# The sprint for the line.
 	if contesting and to_line < sprint_distance and lead_gap < 30.0 and battery > 0.02:
-		return 1.0
+		return sprint_effort
 	# A long-range attack.
 	if attack_at > 0.0 and to_line < attack_at and not attacking:
 		attacking = true
@@ -122,7 +127,10 @@ func decide(delta: float, ahead: CyclistController, gap: float, lead_gap: float,
 			attack_at = -1.0
 		else:
 			return 0.84 + _noise
-	var my_pace := rider.ride_model.target_speed(front_effort)
+	var my_pace := rider.speed_for_effort(front_effort)
+	rider.bot_brake = 0.0
+	# Well below their pace (the start, after braking): get up to speed.
+	var boost := 0.9 if rider.speed < my_pace - 3.0 else 0.0
 	if ahead != null and gap < 30.0:
 		_seen_speed = lerpf(_seen_speed, ahead.speed, clampf(delta / reaction_time, 0.0, 1.0))
 		# Come through and set the pace when the wheel in front dawdles (or
@@ -131,12 +139,15 @@ func decide(delta: float, ahead: CyclistController, gap: float, lead_gap: float,
 		var saving := personality == Personality.WHEELSUCKER or (contesting and personality == Personality.SPRINTER)
 		var chasing := lead_gap > gap + 25.0
 		var after_line := to_line > lap_length - 200.0
-		var pace := my_pace if not chasing else rider.ride_model.target_speed(chase_effort)
+		var pace := my_pace if not chasing else rider.speed_for_effort(chase_effort)
 		if gap < 5.0 and _seen_speed < pace - 1.0 and battery > 0.3 and (not saving or chasing) and (chasing or not after_line):
 			return clampf((chase_effort if chasing else front_effort) + _noise, 0.03, 1.0)
 		# Sit on the wheel ahead: match their speed, closing any gap.
 		var desired := _seen_speed + clampf((gap - wheel_gap) * 0.6, -2.5, 3.0)
-		effort = rider.ride_model.effort_for_speed(desired, rider.draft_bonus_override) + 0.08 * (desired - rider.speed)
+		effort = rider.effort_for_speed(desired, rider.draft_bonus_override) + 0.15 * (desired - rider.speed)
+		# Touch the brakes rather than ride into the wheel ahead.
+		if gap < wheel_gap * 0.6 and rider.speed > _seen_speed:
+			rider.bot_brake = 1.5
 		# How hard they'll chase a gap.
 		var cap := chase_effort + (0.1 if contesting else 0.0)
 		if gap < 4.0:
@@ -158,7 +169,7 @@ func decide(delta: float, ahead: CyclistController, gap: float, lead_gap: float,
 			effort += 0.06  # winding it up before the sprint
 		if personality == Personality.WHEELSUCKER and not contesting:
 			effort = 0.33  # sits up and lets someone else lead
-	return clampf(effort + _noise, 0.03, 1.0)
+	return clampf(maxf(effort, boost) + _noise, 0.03, 1.0)
 
 
 ## A slowly wandering effort offset, so riders don't move in lockstep.

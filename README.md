@@ -108,14 +108,22 @@ forest and open farmland. Ride as far as you can.
 A race on a ~560 m town circuit on a sunny race day, against 3, 5 or 7
 computer riders. **The first rider across the line on each lap scores a point;
 every 5th lap is a bell lap worth 2. First to 5, 10 or 15 points wins.** A race
-to 10 points takes roughly 15–25 minutes.
+to 5 points takes about 10–15 minutes, to 10 points 20–30.
 
-- **Slipstream:** riding right behind someone (within ~1.5 m) you go about
-  20% faster for the same effort, fading to nothing by 8 m. The HUD shows
-  *SHELTERED 20% behind Dan*, *IN THE WIND* or *DROPPED*.
+- **Real-world physics** (criterium only - the zombie modes keep their
+  snappier arcade model): your watts push against your weight, rolling
+  resistance and air drag, so speed builds up gradually and you coast when you
+  stop pedalling. Riding alone on the flat: ~26 km/h at 100 W, ~33 km/h at
+  200 W, ~38 km/h at 300 W. The computer riders ride at percentages of *your*
+  FTP, so "Equal" means equal. Sprints count up to 320% of FTP.
+- **Slipstream:** right behind someone (within ~1.5 m) you have 35% less air
+  drag, fading to nothing by 8 m (a bit more deeper in a line). The HUD shows
+  *SHELTERED -35% wind behind Dan*, *IN THE WIND* or *DROPPED*.
 - **Sprint battery:** everyone (you and the computer riders) has one. Riding
   above your FTP drains it; easy riding refills it. When it's empty you can't
   go above FTP until it recovers, so you can't win every lap. Pick your laps.
+- **Power display:** watts are shown as a 3-second average (all modes), like
+  other cycling apps - trainers report power in noisy bursts.
 - **Computer riders** follow the same rules, with personalities: *diesels*
   pull on the front, *sprinters* sit in and launch ~200 m out, *attackers* go
   early, *wheelsuckers* never lead, *opportunists* wait for bell laps. They
@@ -312,8 +320,10 @@ tests/unit_tests.tscn            Automated checks
   `Runner Slowdown`) and score values. Runner speed is on the `Zombies` node
   (`Runner Speed Bonus`, `Runner Max Speed`).
 - **Criterium:** select the `Race` root in `race/criterium.tscn` for the
-  bell laps, slipstream (`Max Draft Bonus`, `Draft Range`...) and battery
-  (`Battery Capacity`, `Battery Recharge`). The circuit's shape is the `Route`
+  bell laps, slipstream (`Max Draft Bonus` = air drag saved, `Draft
+  Range`...), battery (`Battery Capacity`, `Battery Recharge`, `Max Effort`)
+  and the physics (`Physics`: rider + bike mass, drag area, rolling
+  resistance). The circuit's shape is the `Route`
   node's `Corners` and `Corner Radii`. Rider personalities are the `PROFILES`
   table at the top of `scripts/race/race_bot.gd`.
 

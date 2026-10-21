@@ -204,12 +204,14 @@ func _process(delta: float) -> void:
 
 	# Ride.
 	_speed.text = "%d" % roundi(me.speed * 3.6)
-	_power.text = "%d W" % roundi(me.power_watts)
-	_effort_bar.value = me.requested_effort
-	_effort_label.text = "EFFORT %d%%" % roundi(me.requested_effort * 100.0)
+	_power.text = "%d W" % roundi(me.power_avg)
+	# Effort as % of FTP (effort 1 = 160%); the bar tops out at 300%.
+	var ftp_pct := me.requested_effort * 160.0
+	_effort_bar.value = clampf(ftp_pct / 300.0, 0.0, 1.0)
+	_effort_label.text = "%d%% of FTP" % roundi(ftp_pct)
 	_cadence.text = "%d rpm" % roundi(me.cadence) if me.cadence >= 0.0 else ""
 	var fill := _effort_bar.get_theme_stylebox("fill") as StyleBoxFlat
-	fill.bg_color = Color(0.3, 0.8, 1.0).lerp(Color(1.0, 0.35, 0.1), me.requested_effort)
+	fill.bg_color = Color(0.3, 0.8, 1.0).lerp(Color(1.0, 0.35, 0.1), clampf(ftp_pct / 200.0, 0.0, 1.0))
 	var gear := CyclingInputManager.get_gear()
 	_gear_label.visible = CyclingInputManager.show_gear and gear > 0
 	_gear_label.text = "GEAR %d / %d" % [gear, CyclingInputManager.get_gear_count()]
@@ -217,7 +219,7 @@ func _process(delta: float) -> void:
 	# Shelter.
 	match race.shelter_state(me):
 		"SHELTERED":
-			_shelter.text = "SHELTERED %d%%  behind %s" % [roundi(me.draft_bonus_override * 100.0), me.drafting_behind]
+			_shelter.text = "SHELTERED -%d%% wind  behind %s" % [roundi(me.draft_bonus_override * 100.0), me.drafting_behind]
 			_shelter.label_settings.font_color = COL_SHELTER
 		"DROPPED":
 			_shelter.text = "DROPPED - alone in the wind"
@@ -348,7 +350,7 @@ func show_results(r: Dictionary) -> void:
 	_results_box.add_child(stats)
 	var rows := [
 		["Time in the wind", "%d%%" % roundi(float(r.get("time_in_wind", 0.0)) * 100.0)],
-		["Peak power", "%d W" % roundi(float(r.get("my_max_power", 0.0)))],
+		["Peak power (3 s)", "%d W" % roundi(float(r.get("my_max_power", 0.0)))],
 		["Fastest sprint", "%.1f km/h" % (float(r.get("my_best_sprint", 0.0)) * 3.6)],
 	]
 	for row: Array in rows:
